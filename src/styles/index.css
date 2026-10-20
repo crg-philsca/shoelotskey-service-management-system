@@ -283,7 +283,11 @@ main,
 .service-card-scroll,
 .service-card-scroll *,
 .subtle-vertical-scroll,
-.subtle-vertical-scroll * {
+.subtle-vertical-scroll *,
+.addon-scrollbar,
+.addon-scrollbar *,
+.visible-scrollbar,
+.visible-scrollbar * {
 	scrollbar-width: thin !important;
 	scrollbar-color: #cbd5e1 transparent !important;
 	-ms-overflow-style: auto !important;
@@ -296,10 +300,18 @@ main,
 .subtle-vertical-scroll::-webkit-scrollbar,
 .subtle-vertical-scroll::-webkit-scrollbar:vertical,
 .subtle-vertical-scroll *::-webkit-scrollbar,
-.subtle-vertical-scroll *::-webkit-scrollbar:vertical {
+.subtle-vertical-scroll *::-webkit-scrollbar:vertical,
+.addon-scrollbar::-webkit-scrollbar,
+.addon-scrollbar::-webkit-scrollbar:vertical,
+.addon-scrollbar *::-webkit-scrollbar,
+.addon-scrollbar *::-webkit-scrollbar:vertical,
+.visible-scrollbar::-webkit-scrollbar,
+.visible-scrollbar::-webkit-scrollbar:vertical,
+.visible-scrollbar *::-webkit-scrollbar,
+.visible-scrollbar *::-webkit-scrollbar:vertical {
 	display: block !important;
-	width: 4px !important;
-	height: 4px !important;
+	width: 5px !important;
+	height: 5px !important;
 }
 
 .service-card-scroll::-webkit-scrollbar-track,
@@ -309,9 +321,18 @@ main,
 .subtle-vertical-scroll::-webkit-scrollbar-track,
 .subtle-vertical-scroll::-webkit-scrollbar-track:vertical,
 .subtle-vertical-scroll *::-webkit-scrollbar-track,
-.subtle-vertical-scroll *::-webkit-scrollbar-track:vertical {
+.subtle-vertical-scroll *::-webkit-scrollbar-track:vertical,
+.addon-scrollbar::-webkit-scrollbar-track,
+.addon-scrollbar::-webkit-scrollbar-track:vertical,
+.addon-scrollbar *::-webkit-scrollbar-track,
+.addon-scrollbar *::-webkit-scrollbar-track:vertical,
+.visible-scrollbar::-webkit-scrollbar-track,
+.visible-scrollbar::-webkit-scrollbar-track:vertical,
+.visible-scrollbar *::-webkit-scrollbar-track,
+.visible-scrollbar *::-webkit-scrollbar-track:vertical {
 	display: block !important;
-	background: transparent !important;
+	background: rgba(241, 245, 249, 0.7) !important;
+	border-radius: 9999px !important;
 }
 
 .service-card-scroll::-webkit-scrollbar-thumb,
@@ -321,9 +342,17 @@ main,
 .subtle-vertical-scroll::-webkit-scrollbar-thumb,
 .subtle-vertical-scroll::-webkit-scrollbar-thumb:vertical,
 .subtle-vertical-scroll *::-webkit-scrollbar-thumb,
-.subtle-vertical-scroll *::-webkit-scrollbar-thumb:vertical {
+.subtle-vertical-scroll *::-webkit-scrollbar-thumb:vertical,
+.addon-scrollbar::-webkit-scrollbar-thumb,
+.addon-scrollbar::-webkit-scrollbar-thumb:vertical,
+.addon-scrollbar *::-webkit-scrollbar-thumb,
+.addon-scrollbar *::-webkit-scrollbar-thumb:vertical,
+.visible-scrollbar::-webkit-scrollbar-thumb,
+.visible-scrollbar::-webkit-scrollbar-thumb:vertical,
+.visible-scrollbar *::-webkit-scrollbar-thumb,
+.visible-scrollbar *::-webkit-scrollbar-thumb:vertical {
 	display: block !important;
-	width: 4px !important;
+	width: 5px !important;
 	background: #cbd5e1 !important;
 	border-radius: 9999px !important;
 }
@@ -335,7 +364,15 @@ main,
 .subtle-vertical-scroll::-webkit-scrollbar-thumb:hover,
 .subtle-vertical-scroll::-webkit-scrollbar-thumb:vertical:hover,
 .subtle-vertical-scroll *::-webkit-scrollbar-thumb:hover,
-.subtle-vertical-scroll *::-webkit-scrollbar-thumb:vertical:hover {
+.subtle-vertical-scroll *::-webkit-scrollbar-thumb:vertical:hover,
+.addon-scrollbar::-webkit-scrollbar-thumb:hover,
+.addon-scrollbar::-webkit-scrollbar-thumb:vertical:hover,
+.addon-scrollbar *::-webkit-scrollbar-thumb:hover,
+.addon-scrollbar *::-webkit-scrollbar-thumb:vertical:hover,
+.visible-scrollbar::-webkit-scrollbar-thumb:hover,
+.visible-scrollbar::-webkit-scrollbar-thumb:vertical:hover,
+.visible-scrollbar *::-webkit-scrollbar-thumb:hover,
+.visible-scrollbar *::-webkit-scrollbar-thumb:vertical:hover {
 	background: #94a3b8 !important;
 }
 

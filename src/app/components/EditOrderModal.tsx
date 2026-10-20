@@ -14,7 +14,7 @@ import { useServices } from '../context/ServiceContext';
 import { useOrderCalculations } from '../hooks/useOrderCalculations';
 import { CreatableCombobox } from './ui/creatable-combobox';
 import { CUSTOM_OPTION_KEYS } from '@/app/lib/customOptions';
-import { isAddonVisibleForBaseServices, applyColorCountExclusive, syncColorRenewalAddons, syncFullReglueAddons, isColorCountAddon, isFullReglueSoleAddon } from '@/app/lib/serviceCompatibility';
+import { isAddonVisibleForBaseServices, applyColorCountExclusive, syncColorRenewalAddons, syncFullReglueAddons, isColorCountAddon, isFullReglueSoleAddon, validateColorRenewalSelection, validateFullReglueSelection, getSoleAddonPricingDisplay, sortAddonsForDisplay } from '@/app/lib/serviceCompatibility';
 import { validateCustomerName, CUSTOMER_NAME_MAX_LENGTH } from '@/app/lib/customerValidation';
 
 // Dropdown options
@@ -409,38 +409,30 @@ export default function EditOrderModal({ order, open, onOpenChange, onSave }: Ed
                 }
             }
 
-            // Color Renewal specification validation: requires 2 Colors or 3 Colors, never both
-            const shoeMissingColorCount = shoes.find(shoe => {
-                const base = shoe.baseService || [];
-                if (base.includes('Color Renewal')) {
-                    const addOns = shoe.addOns || [];
-                    const has2 = addOns.some(a => (typeof a === 'string' ? a : a.name) === '2 Colors');
-                    const has3 = addOns.some(a => (typeof a === 'string' ? a : a.name) === '3 Colors');
-                    return !has2 && !has3;
+            // Color Renewal specification validation: requires exactly 2 Colors or 3 Colors, never both
+            for (let i = 0; i < shoes.length; i++) {
+                const shoe = shoes[i];
+                const crValidation = validateColorRenewalSelection(shoe.baseService || [], shoe.addOns || []);
+                if (!crValidation.isValid) {
+                    const itemLabel = shoe.brand ? `Shoe #${i + 1} (${shoe.brand})` : `Shoe #${i + 1}`;
+                    toast.error(`${itemLabel}: ${crValidation.error}`);
+                    isSubmittingRef.current = false;
+                    setIsSubmitting(false);
+                    return;
                 }
-                return false;
-            });
-            if (shoeMissingColorCount) {
-                toast.error('Color Renewal requires specifying the color option (2 Colors or 3 Colors).');
-                isSubmittingRef.current = false;
-                setIsSubmitting(false);
-                return;
             }
 
             // Full Reglue specification validation: requires at least one sole section (Midsole, Undersole, or both)
-            const shoeMissingFullReglueSpec = shoes.find(shoe => {
-                const base = shoe.baseService || [];
-                if (base.includes('Full Reglue')) {
-                    const addOns = shoe.addOns || [];
-                    return !addOns.some(a => isFullReglueSoleAddon(typeof a === 'string' ? a : a.name));
+            for (let i = 0; i < shoes.length; i++) {
+                const shoe = shoes[i];
+                const frValidation = validateFullReglueSelection(shoe.baseService || [], shoe.addOns || []);
+                if (!frValidation.isValid) {
+                    const itemLabel = shoe.brand ? `Shoe #${i + 1} (${shoe.brand})` : `Shoe #${i + 1}`;
+                    toast.error(`${itemLabel}: ${frValidation.error}`);
+                    isSubmittingRef.current = false;
+                    setIsSubmitting(false);
+                    return;
                 }
-                return false;
-            });
-            if (shoeMissingFullReglueSpec) {
-                toast.error('Full Reglue requires specifying the reglue section (Midsole, Undersole, or both).');
-                isSubmittingRef.current = false;
-                setIsSubmitting(false);
-                return;
             }
 
             const orderIntakeDate = orderDate
@@ -763,10 +755,10 @@ export default function EditOrderModal({ order, open, onOpenChange, onSave }: Ed
                             {shoes.map((shoe, index) => {
                                 const isExpanded = expandedShoeId === shoe.id.toString() || shoes.length === 1;
                                 
-                                const allowedAddons = calculations.addOnServices
-                                    .filter(addon => isAddonVisibleForBaseServices(addon.name, shoe.baseService || [], services))
-                                    .sort((a, b) => (Number(a.sortOrder) || 999) - (Number(b.sortOrder) || 999))
-                                    .map(a => a.name);
+                                const allowedAddons = sortAddonsForDisplay(
+                                    calculations.addOnServices.filter(addon => isAddonVisibleForBaseServices(addon.name, shoe.baseService || [], services)),
+                                    shoe.baseService || []
+                                ).map(a => a.name);
                                 
                                 return (
                                     <div key={shoe.id} className="bg-white rounded-xl shadow-sm border border-gray-50 overflow-hidden">
@@ -806,7 +798,20 @@ export default function EditOrderModal({ order, open, onOpenChange, onSave }: Ed
                                                         <CreatableCombobox
                                                             options={SHOE_BRANDS}
                                                             value={shoe.brand || ''}
-                                                            onChange={(val) => updateShoe(shoe.id, { brand: val })}
+                                                            onChange={(val) => {
+                                                                const updates: any = { brand: val };
+                                                                if (val && shoe.shoeModel) {
+                                                                    const modelBrand = MODEL_TO_BRAND[shoe.shoeModel];
+                                                                    if (modelBrand && modelBrand !== val) {
+                                                                        updates.shoeModel = '';
+                                                                        updates.shoeMaterial = '';
+                                                                    } else if (BRAND_MODELS[val] && !BRAND_MODELS[val].includes(shoe.shoeModel)) {
+                                                                        updates.shoeModel = '';
+                                                                        updates.shoeMaterial = '';
+                                                                    }
+                                                                }
+                                                                updateShoe(shoe.id, updates);
+                                                            }}
                                                             placeholder="Select brand"
                                                             searchPlaceholder="Search brand..."
                                                             storageKey={CUSTOM_OPTION_KEYS.BRANDS}
@@ -826,7 +831,7 @@ export default function EditOrderModal({ order, open, onOpenChange, onSave }: Ed
                                                             }}
                                                             placeholder="Select model"
                                                             searchPlaceholder="Search model..."
-                                                            storageKey={CUSTOM_OPTION_KEYS.MODELS}
+                                                            storageKey={shoe.brand ? `${CUSTOM_OPTION_KEYS.MODELS}_${shoe.brand}` : CUSTOM_OPTION_KEYS.MODELS}
                                                         />
                                                     </div>
                                                     <div>
@@ -970,9 +975,26 @@ export default function EditOrderModal({ order, open, onOpenChange, onSave }: Ed
                                                                             }}
                                                                             className="mt-0.5 shrink-0 self-start"
                                                                         />
-                                                                        <div className="flex flex-col gap-0.5">
+                                                                        <div className="flex flex-col gap-0.5 flex-1 min-w-0">
                                                                             <span className="text-[11px] font-bold text-gray-700 leading-tight">{s.name}</span>
-                                                                            <span className="text-[10px] font-black text-gray-400">₱{s.price}</span>
+                                                                            {s.name === 'Full Reglue' ? (
+                                                                                <div className="mt-0.5 min-w-0">
+                                                                                    <span className="text-[8.5px] font-semibold text-amber-700 leading-tight block break-words" title="Select Midsole or Undersole">
+                                                                                        Select Midsole or Undersole
+                                                                                    </span>
+                                                                                </div>
+                                                                            ) : s.name === 'Color Renewal' ? (
+                                                                                <div className="mt-0.5 min-w-0">
+                                                                                    <span className="text-[8.5px] font-semibold text-amber-700 leading-tight block break-words" title="Select 2 Colors or 3 Colors">
+                                                                                        Select 2 Colors or 3 Colors
+                                                                                    </span>
+                                                                                </div>
+                                                                            ) : null}
+                                                                            <div className="flex items-center justify-end mt-1 min-w-0">
+                                                                                <span className="text-[10px] font-black text-gray-400 shrink-0 ml-auto whitespace-nowrap">
+                                                                                    {s.price > 0 ? `₱${s.price}` : 'Price varies'}
+                                                                                </span>
+                                                                            </div>
                                                                         </div>
                                                                     </label>
                                                                 );
@@ -1040,7 +1062,7 @@ export default function EditOrderModal({ order, open, onOpenChange, onSave }: Ed
                                                                                                 }
                                                                                             }
 
-                                                                                            const nextAddOns = syncColorRenewalAddons(newAddons, newBaseServices);
+                                                                                            const nextAddOns = syncFullReglueAddons(syncColorRenewalAddons(newAddons, newBaseServices), newBaseServices);
                                                                                             updateShoe(shoe.id, { baseService: newBaseServices, addOns: nextAddOns });
                                                                                         }}
                                                                                         className="mt-0.5 shrink-0 self-start"
@@ -1068,22 +1090,21 @@ export default function EditOrderModal({ order, open, onOpenChange, onSave }: Ed
                                                                                                 />
                                                                                             ) : <div />}
                                                                                             {(() => {
-                                                                                                const isFR = (shoe.baseService || []).includes('Full Reglue');
-                                                                                                const isSole = isFullReglueSoleAddon(addonName);
-                                                                                                const soleAddons = (shoe.addOns || []).filter((a: any) => isFullReglueSoleAddon(typeof a === 'string' ? a : a.name));
-                                                                                                const isFirstSole = (typeof soleAddons[0] === 'string' ? soleAddons[0] : soleAddons[0]?.name) === addonName;
-                                                                                                if (isFR && isSole && (soleAddons.length === 1 || isFirstSole)) {
+                                                                                                    const isFR = (shoe.baseService || []).includes('Full Reglue');
+                                                                                                    const isSole = isFullReglueSoleAddon(addonName);
+                                                                                                    if (isFR && isSole) {
+                                                                                                        const solePricing = getSoleAddonPricingDisplay(addonName, shoe.addOns || [], shoe.baseService || []);
+                                                                                                        return (
+                                                                                                            <span className="text-[10px] font-black text-red-600 shrink-0 ml-auto">
+                                                                                                                {solePricing.displayLabel}
+                                                                                                            </span>
+                                                                                                        );
+                                                                                                    }
                                                                                                     return (
                                                                                                         <span className="text-[10px] font-black text-red-600 shrink-0 ml-auto">
-                                                                                                            ₱0.00
+                                                                                                            ₱{Number(addonData.price * quantity).toFixed(2)}
                                                                                                         </span>
                                                                                                     );
-                                                                                                }
-                                                                                                return (
-                                                                                                    <span className="text-[10px] font-black text-red-600 shrink-0 ml-auto">
-                                                                                                        ₱{Number(addonData.price * quantity).toFixed(2)}
-                                                                                                    </span>
-                                                                                                );
                                                                                             })()}
                                                                                         </div>
                                                                                     </div>
@@ -1131,7 +1152,7 @@ export default function EditOrderModal({ order, open, onOpenChange, onSave }: Ed
                                                                                                 }
                                                                                             }
 
-                                                                                            const nextAddOns = syncColorRenewalAddons(newAddons, newBaseServices);
+                                                                                            const nextAddOns = syncFullReglueAddons(syncColorRenewalAddons(newAddons, newBaseServices), newBaseServices);
                                                                                             updateShoe(shoe.id, { baseService: newBaseServices, addOns: nextAddOns });
                                                                                         }}
                                                                                         className="mt-0.5 shrink-0 self-start"

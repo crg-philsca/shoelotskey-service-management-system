@@ -18,7 +18,7 @@ import {
 } from 'lucide-react';
 import { Button } from '@/app/components/ui/button';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/app/components/ui/tooltip';
-import { Sheet, SheetContent, SheetTrigger } from '@/app/components/ui/sheet';
+import { Sheet, SheetContent, SheetTrigger, SheetHeader, SheetTitle, SheetDescription } from '@/app/components/ui/sheet';
 import { useState, useEffect } from 'react';
 
 interface LayoutProps {
@@ -260,6 +260,10 @@ export default function Layout({ children, user, onLogout, headerAction, headerC
                 closeClassName="bg-red-800 hover:bg-red-900 text-white border-red-500/50 shadow-sm" 
                 className="p-0 bg-red-700 border-none w-72 max-w-[85vw] h-full min-h-[100dvh] max-h-[100dvh] z-[1000] overflow-hidden rounded-none"
               >
+                <SheetHeader className="sr-only">
+                  <SheetTitle>Mobile Navigation Menu</SheetTitle>
+                  <SheetDescription>Access application navigation and menu features</SheetDescription>
+                </SheetHeader>
                 <SidebarContent collapsed={false} />
               </SheetContent>
             </Sheet>

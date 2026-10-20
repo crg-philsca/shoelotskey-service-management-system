@@ -6,7 +6,7 @@ import { PlusCircle, Edit, Trash, GripVertical, AlertTriangle, Clock, Calendar }
 import { Reorder } from 'motion/react';
 import ServiceModal from '@/app/components/ServiceModal';
 import ScheduleModal from '@/app/components/ScheduleModal';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/app/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/app/components/ui/dialog';
 
 import { Service } from '@/app/types';
 import { useServices } from '@/app/context/ServiceContext';
@@ -176,7 +176,14 @@ export default function ServiceManagement({ onSetHeaderActionRight, user }: Serv
                         <GripVertical size={14} className="text-gray-400 shrink-0" />
                         <div className="min-w-0">
                           <p className="font-bold text-gray-900 text-xs sm:text-[12.5px] leading-tight truncate">{service.name}</p>
-                          <p className="text-[11px] sm:text-[11.5px] font-black text-red-600 mt-0.5 leading-none">{formatPeso(service.price)}</p>
+                          <p className="text-[11px] sm:text-[11.5px] font-black text-red-600 mt-0.5 leading-none">
+                            {service.price > 0 ? formatPeso(service.price) : 'Price varies'}
+                          </p>
+                          {service.name === 'Color Renewal' && (
+                            <p className="text-[9.5px] font-medium text-gray-500 mt-0.5 leading-tight truncate" title="Select 2 Colors or 3 Colors under Add-on Services.">
+                              Select 2 or 3 Colors in Add-ons
+                            </p>
+                          )}
                         </div>
                       </div>
                       <div className="flex items-center gap-1.5 shrink-0">
@@ -421,6 +428,9 @@ export default function ServiceManagement({ onSetHeaderActionRight, user }: Serv
                 <AlertTriangle className="h-5 w-5 text-red-600 animate-pulse" />
                 Confirm Service Deletion
               </DialogTitle>
+              <DialogDescription className="text-xs text-gray-500">
+                Are you sure you want to completely remove this service from the catalog?
+              </DialogDescription>
             </DialogHeader>
             <p className="text-sm text-gray-700 leading-relaxed py-2">
               Are you sure you want to completely remove <strong className="text-red-700 font-bold">"{deleteTarget.name}"</strong> from the active service catalog? This administrative action cannot be undone.

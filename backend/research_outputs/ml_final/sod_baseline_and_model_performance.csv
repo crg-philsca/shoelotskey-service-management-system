@@ -1,0 +1,8 @@
+Model / Benchmark,MAE (Days),RMSE (Days),R²,±1 Day,±2 Days,±3 Days,±5 Days
+Mean-Duration Baseline,7.6391,8.2173,-0.0000,0.00%,0.00%,0.13%,14.93%
+Median-Duration Baseline,7.3353,8.7960,-0.1458,14.67%,14.87%,14.87%,48.80%
+Base-Tier Rule Baseline (Static SLA),0.1967,0.5825,0.9950,98.33%,99.07%,99.33%,100.00%
+Complete Generator-Derived Rule Baseline,0.0000,0.0000,1.0000,100.00%,100.00%,100.00%,100.00%
+Linear Regression,2.5097,3.2123,0.8472,21.00%,55.40%,73.93%,91.53%
+Decision Tree Regressor,0.0773,0.4053,0.9976,97.33%,98.93%,99.47%,100.00%
+Random Forest Regressor (Final Model),0.0815,0.4042,0.9976,97.20%,98.93%,99.53%,100.00%

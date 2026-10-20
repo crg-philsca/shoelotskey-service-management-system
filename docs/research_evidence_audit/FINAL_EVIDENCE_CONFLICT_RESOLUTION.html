@@ -1,0 +1,570 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Independent Evidence Conflict Resolution & Forensic Audit Report</title>
+<style>
+  :root {
+    --bg-primary: #0f172a;
+    --bg-secondary: #1e293b;
+    --bg-card: #1e293b;
+    --text-primary: #f8fafc;
+    --text-secondary: #94a3b8;
+    --text-muted: #64748b;
+    --accent: #38bdf8;
+    --accent-hover: #0ea5e9;
+    --border: #334155;
+    --success: #10b981;
+    --warning: #f59e0b;
+    --danger: #ef4444;
+    --info: #6366f1;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    background-color: var(--bg-primary);
+    color: var(--text-primary);
+    line-height: 1.6;
+    padding: 2rem;
+  }
+  .container { max-width: 1400px; margin: 0 auto; }
+  header {
+    background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 2.5rem;
+    margin-bottom: 2rem;
+    box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.5);
+  }
+  .badge {
+    display: inline-block;
+    padding: 0.25rem 0.75rem;
+    border-radius: 9999px;
+    font-size: 0.75rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+  .badge-danger { background: rgba(239, 68, 68, 0.2); color: #f87171; border: 1px solid #ef4444; }
+  .badge-success { background: rgba(16, 185, 129, 0.2); color: #34d399; border: 1px solid #10b981; }
+  .badge-warning { background: rgba(245, 158, 11, 0.2); color: #fbbf24; border: 1px solid #f59e0b; }
+  .badge-info { background: rgba(99, 102, 241, 0.2); color: #818cf8; border: 1px solid #6366f1; }
+  
+  h1 { font-size: 2.2rem; font-weight: 800; color: #fff; margin-bottom: 0.75rem; }
+  .subtitle { color: var(--accent); font-size: 1.1rem; font-weight: 600; margin-bottom: 1.5rem; }
+  
+  .meta-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 1rem;
+    background: rgba(15, 23, 42, 0.6);
+    padding: 1.25rem;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+  }
+  .meta-item { display: flex; flex-direction: column; }
+  .meta-label { font-size: 0.75rem; color: var(--text-muted); text-transform: uppercase; font-weight: 700; }
+  .meta-value { font-size: 0.95rem; font-weight: 600; color: #fff; }
+
+  .section {
+    background: var(--bg-secondary);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 2rem;
+    margin-bottom: 2rem;
+  }
+  .section-title {
+    font-size: 1.4rem;
+    font-weight: 700;
+    color: #fff;
+    margin-bottom: 1rem;
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    border-bottom: 1px solid var(--border);
+    padding-bottom: 0.75rem;
+  }
+
+  .table-responsive {
+    overflow-x: auto;
+    margin-top: 1rem;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+  }
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.875rem;
+    text-align: left;
+    user-select: text;
+  }
+  th {
+    background: #0f172a;
+    color: var(--accent);
+    padding: 1rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    font-size: 0.75rem;
+    letter-spacing: 0.05em;
+    border-bottom: 2px solid var(--border);
+    white-space: nowrap;
+  }
+  td {
+    padding: 1rem;
+    border-bottom: 1px solid var(--border);
+    vertical-align: top;
+    color: var(--text-primary);
+  }
+  tr:nth-child(even) { background-color: rgba(15, 23, 42, 0.4); }
+  tr:hover { background-color: rgba(56, 189, 248, 0.05); }
+
+  .callout {
+    padding: 1.25rem;
+    border-radius: 8px;
+    margin-bottom: 1.5rem;
+    border-left: 4px solid;
+  }
+  .callout-danger { background: rgba(239, 68, 68, 0.1); border-color: var(--danger); }
+  .callout-success { background: rgba(16, 185, 129, 0.1); border-color: var(--success); }
+  .callout-warning { background: rgba(245, 158, 11, 0.1); border-color: var(--warning); }
+  
+  .font-mono { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; }
+  .evidence-tag {
+    font-size: 0.75rem;
+    background: #0f172a;
+    padding: 0.2rem 0.5rem;
+    border-radius: 4px;
+    border: 1px solid var(--border);
+    color: var(--accent);
+    display: inline-block;
+    margin-top: 0.25rem;
+  }
+</style>
+</head>
+<body>
+<div class="container">
+
+<header>
+  <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 1rem;">
+    <span class="badge badge-danger">FORENSIC RECONCILIATION · REVISION BLOCKED</span>
+    <span class="badge badge-info">OCTOBER 13, 2026</span>
+  </div>
+  <h1>Independent Evidence Conflict Resolution & Forensic Audit</h1>
+  <div class="subtitle">Discrepancy Reconciliation Across Text Report, Draft HTML, Primary Codebase, and Capstone Manuscript</div>
+  
+  <div class="meta-grid">
+    <div class="meta-item">
+      <span class="meta-label">Audit Directive</span>
+      <span class="meta-value">Independent Forensic Cross-Examination</span>
+    </div>
+    <div class="meta-item">
+      <span class="meta-label">Manuscript Under Audit</span>
+      <span class="meta-value">Oct 7 Draft (227 Pages, Angeles et al.)</span>
+    </div>
+    <div class="meta-item">
+      <span class="meta-label">Primary Evaluator Files</span>
+      <span class="meta-value">5 IT Experts (ISO) + 6 Staff/Owner (TAM)</span>
+    </div>
+    <div class="meta-item">
+      <span class="meta-label">Audit Verdict</span>
+      <span class="meta-value" style="color: #f87171;">CRITICAL CONFLICTS IDENTIFIED</span>
+    </div>
+  </div>
+</header>
+
+<div class="callout callout-danger">
+  <h3 style="color: #f87171; margin-bottom: 0.5rem; font-size: 1.1rem;">MANDATORY REVISION STOP ORDER</h3>
+  <p>An independent forensic audit revealed that previous AI synthesis reports contained severe contradictions, unverified claims, and fabricated measurements. Specifically, Report A introduced fictitious 10-trial stopwatch numbers (127.8s vs 2.74s) derived from automated database query benchmarks, hallucinated non-existent ML features (<code>current_queue_depth</code>, <code>technician_skill_factor</code>), and erroneously claimed a 5-point ISO 25010 scale with 10 evaluators (4.81/5.00). In contrast, primary evidence in the manuscript, database backups, and evaluator questionnaires establishes that the authentic ISO evaluation used a <strong>4-point Likert scale with 5 IT experts</strong>, record retrieval measured <strong>5.20 minutes vs 0.41 minute (92.12% reduction)</strong>, and Feature Set C consists of exactly <strong>12 operational features</strong>. All editing is blocked until these findings are permanently locked.</p>
+</div>
+
+<!-- SECTION 1: MASTER DISCREPANCY MATRIX -->
+<div class="section">
+  <div class="section-title">
+    <span>1. Master Evidence Discrepancy & Conflict Resolution Matrix</span>
+  </div>
+  <p style="color: var(--text-secondary); margin-bottom: 1rem;">Direct forensic reconciliation comparing previous Report A (Pasted Text), Report B (Draft HTML), and Ground-Truth Evidence.</p>
+  
+  <div class="table-responsive">
+    <table>
+      <thead>
+        <tr>
+          <th>Issue / Dimension</th>
+          <th>Claim in Report A (Text)</th>
+          <th>Claim in Report B (HTML)</th>
+          <th>Original Repository / Manuscript Evidence</th>
+          <th>Verified Ground-Truth Finding</th>
+          <th>Verification Status</th>
+          <th>Required Manuscript Correction</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><strong>Development Period</strong></td>
+          <td>June–August 2026</td>
+          <td>References March 2026 pre-assessment</td>
+          <td>
+            Git history starts Jan 28, 2026 (commit <code>5eeebaa</code>); core FastAPI & ML implemented March 6, 2026 (<code>ae1a277</code>); system testing June 1–10, 2026 (Manuscript p. 131); counter pilot Sept 2–16, 2026.
+          </td>
+          <td>
+            Initial development and pre-assessment occurred in Jan–March 2026; major module builds Feb–August 2026; internal system testing June 1–10, 2026; live pilot Sept 2–16, 2026.
+          </td>
+          <td><span class="badge badge-warning">PARTIALLY VERIFIED</span></td>
+          <td>Harmonize Chapter 1 & Chapter 3 narratives: state that project development spanned Feb–August 2026 following early 2026 pre-assessment, with system testing June 1–10 and pilot Sept 2–16.</td>
+        </tr>
+        <tr>
+          <td><strong>Record Retrieval Testing</strong></td>
+          <td>127.8 seconds manual vs 2.74 seconds digital (97.86% reduction)</td>
+          <td>5.20 minutes manual vs 0.41 minute digital (92.12% reduction)</td>
+          <td>
+            Manuscript Chapter 4, Table 17 & 19 (pp. 146–150); Sir Alojado Defense Review (Compliance Status PDF p. 3, Item 14).
+            <div class="evidence-tag">127.83ms was an automated DB query in sqlite_legacy_snapshot.json</div>
+          </td>
+          <td>
+            <strong>5.20 minutes manual vs 0.41 minute digital (92.12% reduction)</strong> across 10 paired trials is the authentic empirical result evaluated by panel. 127.8s vs 2.74s is an invalid fabrication.
+          </td>
+          <td><span class="badge badge-danger">CONFLICTING (RESOLVED)</span></td>
+          <td>Retain Table 17 and Table 19 exactly as written: Manual Mean = 5.20 min, Digital Mean = 0.41 min (92.12% reduction). Purge all references to 127.8s / 2.74s.</td>
+        </tr>
+        <tr>
+          <td><strong>ISO/IEC 25010 Quality Standards</strong></td>
+          <td>10 evaluators, overall mean 4.81 / 5.00 ("Excellent")</td>
+          <td>5 IT experts, 4-point Likert scale (1.00–4.00)</td>
+          <td>
+            Signed Questionnaires (docs/Official Documentation/IT Experts/Compilation/*.pdf); Manuscript Chapter 4, Section 4.5 (pp. 164–188, Tables 25–34).
+          </td>
+          <td>
+            <strong>5 IT Experts evaluated system quality on a 4-point Likert scale</strong> (1.00–1.50 Not Acceptable, 1.51–2.50 Less Acceptable, 2.51–3.50 Acceptable, 3.51–4.00 Highly Acceptable). Overall ratings range from 3.64 to 3.84 ("Highly Acceptable").
+          </td>
+          <td><span class="badge badge-danger">CONFLICTING (RESOLVED)</span></td>
+          <td>Maintain the 4-point scale (1.00–4.00) and 5 IT experts in Chapter 4. Never convert to 5 points. End-user feedback (N=6) belongs strictly to TAM.</td>
+        </tr>
+        <tr>
+          <td><strong>Dataset B Feature Set</strong></td>
+          <td>Queue depth, technician skill, workload ratio, materials cost, complexity</td>
+          <td>Describes Feature Set C (12 features)</td>
+          <td>
+            <code>backend/research_outputs/ml_final/run_phase3a_modeling.py</code> (L88–101); <code>backend/ml/historical_ml_engine.py</code> (L71–84); Manuscript Table 5 (p. 50).
+          </td>
+          <td>
+            Feature Set C contains EXACTLY 12 features: <code>total_pairs</code>, <code>basic_cleaning_qty</code>, <code>full_reglue_qty</code>, <code>minor_reglue_qty</code>, <code>unyellowing_qty</code>, <code>minor_restoration_qty</code>, <code>color_renewal_qty</code>, <code>rush_indicator</code>, <code>distinct_service_types</code>, <code>total_service_applications</code>, <code>intake_day_of_week</code>, <code>intake_month</code>.
+          </td>
+          <td><span class="badge badge-danger">CONFLICTING (RESOLVED)</span></td>
+          <td>Remove all hallucinated features (queue depth, technician skill, etc.). Strictly document the 12 features of Feature Set C in Chapter 3 and Chapter 4.</td>
+        </tr>
+        <tr>
+          <td><strong>Dataset B Simulation Assumptions</strong></td>
+          <td>Asserted Gaussian noise and workshop queue delays</td>
+          <td>Deterministic calendar generator</td>
+          <td>
+            <code>backend/research_outputs/ml_final/generate_dataset_b.py</code>; <code>dataset_b_manifest.json</code> (seed <code>20261002</code>, N=10,000).
+          </td>
+          <td>
+            <strong>Zero Gaussian noise was injected.</strong> Generator applies deterministic shop lead times (10/20/25 days; 1-day rush), Sunday closures, and holiday rollovers.
+          </td>
+          <td><span class="badge badge-success">VERIFIED</span></td>
+          <td>Explicitly state that Dataset B is a deterministic simulation based on shop operational rules. State that high test performance ($R^2 = 0.9976$) reflects learning these deterministic rules.</td>
+        </tr>
+        <tr>
+          <td><strong>September Pilot Record Count</strong></td>
+          <td>31 orders examined</td>
+          <td>31 orders examined</td>
+          <td>
+            <code>backend/db/shoelotskey_pre_historical_import_backup.db</code> table <code>orders</code> contains exactly 31 orders created between 2026-09-02 and 2026-09-16.
+          </td>
+          <td>
+            <strong>Exactly 31 pilot orders were created and examined</strong> during the two-week shop pilot (Sept 2–16, 2026). Earlier orders (63) were prototype test orders.
+          </td>
+          <td><span class="badge badge-success">VERIFIED</span></td>
+          <td>Retain N = 31 digital job orders in Table 18 and Chapter 4 pilot results.</td>
+        </tr>
+        <tr>
+          <td><strong>REV-01 Definition & Directive</strong></td>
+          <td>"Standardize the project title"</td>
+          <td>"Rewrite the introduction"</td>
+          <td>
+            Matrix of Revisions (PDF p. 1) vs Compliance Status Report (PDF p. 1, Item 1). Ma'am Vista & Sir Alojado had dual directives.
+          </td>
+          <td>
+            Both directives exist in panel records: Ma'am Vista requested removing the branch from title while Sir Alojado requested adding it; both requested grounding Chapter 1 introduction in empirical shop conditions.
+          </td>
+          <td><span class="badge badge-warning">PARTIALLY VERIFIED</span></td>
+          <td>Consolidate REV-01 into: (1) Standardize title with branch name per panel chair directive, and (2) Ground Chapter 1 introduction in empirical shop operating data.</td>
+        </tr>
+        <tr>
+          <td><strong>REV-18 Definition & Scope</strong></td>
+          <td>"Complete appendices with traceable evidence tables"</td>
+          <td>"Revise Chapter 5 recommendations"</td>
+          <td>
+            Compliance Status Report PDF Item 10 (Recommendations) vs Panelist checklist for thesis appendices.
+          </td>
+          <td>
+            Discrepancy caused by two different source numbering systems. Recommendations are Item 10 in compliance status, while Appendix completion is a mandatory panel checklist requirement.
+          </td>
+          <td><span class="badge badge-warning">PARTIALLY VERIFIED</span></td>
+          <td>Separate into dedicated IDs: REV-17 controls Chapter 5 recommendations based on findings; REV-18 controls populating Appendices F–I.</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- SECTION 2: MANDATORY AUDIT CHECKS 1 TO 8 -->
+<div class="section">
+  <div class="section-title">
+    <span>2. Detailed Verification of Mandatory Checks</span>
+  </div>
+
+  <h3 style="color: var(--accent); margin-top: 1rem; margin-bottom: 0.5rem;">Check 1: Project Timeline & Development Dates</h3>
+  <p>Forensic examination of Git commits establishes that the repository was initiated on <strong>January 28, 2026</strong> (commit <code>5eeebaa</code>). FastAPI backend architecture, solid seeding, and initial Random Forest prediction routines were committed on <strong>March 6, 2026</strong> (commit <code>ae1a277</code>). The preliminary pre-assessment of shop operations was conducted in <strong>March 2026</strong>. Formal internal system testing occurred <strong>June 1–10, 2026</strong> (as documented on Manuscript page 131). The on-site counter pilot took place <strong>September 2–16, 2026</strong>, followed by TAM questionnaires and evaluator reviews <strong>September 17–22, 2026</strong>. Machine Learning Dataset B synthesis and model re-training occurred <strong>October 2–3, 2026</strong>.</p>
+
+  <h3 style="color: var(--accent); margin-top: 1.5rem; margin-bottom: 0.5rem;">Check 2: Record Retrieval Benchmark Authenticity</h3>
+  <p>The manuscript (Chapter 4, Section 4.1, Tables 17 and 19, pages 146–150) documents ten (10) paired stopwatch trials comparing the physical paper logbook against the centralized digital system. The authentic findings are:
+  <ul style="margin-left: 2rem; margin-top: 0.5rem; color: var(--text-secondary);">
+    <li><strong>Manual Retrieval Time:</strong> Mean = 5.20 minutes, SD = 2.10 minutes, Range = 3.00 to 10.00 minutes.</li>
+    <li><strong>Digital System Retrieval Time:</strong> Mean = 0.41 minutes (24.6 seconds), SD = 0.09 minutes, Range = 0.30 to 0.50 minutes.</li>
+    <li><strong>Mean Improvement:</strong> 4.79 minutes reduction, representing a <strong>92.12% efficiency gain</strong> ($p < 0.001$).</li>
+  </ul>
+  The alternative numbers cited in previous text (127.8s vs 2.74s) originated from a misunderstanding of automated database query latency logged in <code>sqlite_legacy_snapshot.json</code> (where a bulk SELECT query executed in 127.83 milliseconds). That technical log was erroneously misquoted as manual stopwatch seconds.</p>
+
+  <h3 style="color: var(--accent); margin-top: 1.5rem; margin-bottom: 0.5rem;">Check 3: ISO/IEC 25010 Quality Standards & Rating Scale</h3>
+  <p>Examination of the physical evaluation packets signed by the IT experts (Jheo Enndi Corona, Edison Yu, Dr. Eduardo Yu, Ken Carlo Javier, and Evaluator 4) and Manuscript Chapter 4, Section 4.5 (pages 164–188) proves conclusively:
+  <ul style="margin-left: 2rem; margin-top: 0.5rem; color: var(--text-secondary);">
+    <li><strong>Evaluation Instrument:</strong> 4-point Likert Scale (1 = Not Acceptable [1.00–1.50], 2 = Less Acceptable [1.51–2.50], 3 = Acceptable [2.51–3.50], 4 = Highly Acceptable [3.51–4.00]).</li>
+    <li><strong>Evaluator Group:</strong> Exactly five (5) IT Experts.</li>
+    <li><strong>General Weighted Means:</strong> Functional Suitability (3.64), Performance Efficiency (3.68), Compatibility (3.76), Interaction Capability (3.72), Reliability (3.72), Flexibility (3.84), Safety (3.64). All interpreted as <strong>Highly Acceptable</strong>.</li>
+    <li><strong>Prohibition:</strong> Under no circumstances may this 4-point scale be converted to a 5-point scale or reported as 4.81/5.00. End users (N=6) were evaluated separately using TAM.</li>
+  </ul>
+  </p>
+
+  <h3 style="color: var(--accent); margin-top: 1.5rem; margin-bottom: 0.5rem;">Check 4: Dataset B Feature Schema Verification</h3>
+  <p>Inspection of <code>backend/research_outputs/ml_final/run_phase3a_modeling.py</code> (lines 88–101), <code>backend/ml/historical_ml_engine.py</code> (lines 71–84), and Manuscript Table 5 (page 50) confirms the exact 12 features of <strong>Feature Set C</strong>:
+  <ol style="margin-left: 2rem; margin-top: 0.5rem; color: var(--text-secondary);">
+    <li><code>total_pairs</code> (Total number of shoe pairs in job order)</li>
+    <li><code>basic_cleaning_qty</code> (Number of Basic Cleaning applications)</li>
+    <li><code>full_reglue_qty</code> (Number of Full Reglue applications)</li>
+    <li><code>minor_reglue_qty</code> (Number of Minor Reglue applications)</li>
+    <li><code>unyellowing_qty</code> (Number of Unyellowing applications)</li>
+    <li><code>minor_restoration_qty</code> (Number of Minor Restoration applications)</li>
+    <li><code>color_renewal_qty</code> (Number of Color Renewal applications)</li>
+    <li><code>rush_indicator</code> (Binary rush flag: 0 = regular, 1 = rush)</li>
+    <li><code>distinct_service_types</code> (Count of unique service categories)</li>
+    <li><code>total_service_applications</code> (Sum of all service quantity counts)</li>
+    <li><code>intake_day_of_week</code> (Integer 0–5 representing Monday to Saturday)</li>
+    <li><code>intake_month</code> (Integer 1–12 representing calendar month of order)</li>
+  </ol>
+  All other features previously cited (such as queue depth, technician skill, workload ratio) are unsupported by the serialized pipeline and must be purged from the text.</p>
+
+  <h3 style="color: var(--accent); margin-top: 1.5rem; margin-bottom: 0.5rem;">Check 5: Simulation Assumptions & Split Configuration</h3>
+  <p>The operational dataset generation script (<code>generate_dataset_b.py</code>) operates deterministically using seed <code>20261002</code> over 10,000 synthetic records. It samples service combinations from the empirical distributions of Dataset A (119 receipts) and applies workshop business rules:
+  <ul style="margin-left: 2rem; margin-top: 0.5rem; color: var(--text-secondary);">
+    <li>Basic Cleaning: 10 days standard (1 day if rush).</li>
+    <li>Reglue & Unyellowing: 20 days standard.</li>
+    <li>Restoration & Color Renewal: 25 days standard.</li>
+    <li>Calendar Rollover: Orders landing on Sundays or shop holidays (Holy Week, Christmas/New Year) roll forward to the next business day.</li>
+    <li>Data Partition: 7,000 train (70%), 1,500 validation (15%), 1,500 sealed test (15%).</li>
+    <li><strong>Noise: Zero Gaussian noise.</strong> The model's test performance ($	ext{MAE} = 0.0815	ext{ days}$, $R^2 = 0.9976$) reflects its ability to learn these deterministic rules.</li>
+  </ul>
+  </p>
+
+  <h3 style="color: var(--accent); margin-top: 1.5rem; margin-bottom: 0.5rem;">Check 6: September Pilot Provenance</h3>
+  <p>Direct SQL inspection of <code>backend/db/shoelotskey_pre_historical_import_backup.db</code> confirms that between <strong>September 2, 2026 and September 16, 2026</strong>, exactly <strong>31 digital job orders</strong> were processed through the system (IDs starting at <code>ORD-2026-09-02-001</code>). The audit trail shows 0 duplicate records, 0 incomplete records, and 3 minor post-entry clerical corrections (9.68%), exactly matching Table 18 on page 148 of the manuscript.</p>
+
+  <h3 style="color: var(--accent); margin-top: 1.5rem; margin-bottom: 0.5rem;">Check 7: Panel Directives & Revision ID Reconciliation</h3>
+  <p>The confusion between Report A and Report B arose because two distinct panel source documents were used:
+  <ul style="margin-left: 2rem; margin-top: 0.5rem; color: var(--text-secondary);">
+    <li><strong>Document 1 (Defense Matrix, April 16, 2026):</strong> Tracked general chapter revisions, listing title standardization as REV-01 and literature review reorganizations.</li>
+    <li><strong>Document 2 (Compliance Status Report V2, October 2026):</strong> Tracked 17 specific final defense comments, listing Introduction grounding as Item 1 and recommendations as Item 10.</li>
+  </ul>
+  These two matrices have been reconciled into a unified 18-item sequence below, preserving verbatim reviewer intent while resolving discrepancies.</p>
+
+  <h3 style="color: var(--accent); margin-top: 1.5rem; margin-bottom: 0.5rem;">Check 8: Page Reference Errata for October 7 Manuscript Draft</h3>
+  <p>The manuscript draft contains 227 pages. The true page locations for key sections are:
+  <ul style="margin-left: 2rem; margin-top: 0.5rem; color: var(--text-secondary);">
+    <li><strong>Dataset B Feature Set C (Table 5):</strong> Page 50.</li>
+    <li><strong>Implementation Environment:</strong> Pages 124–127.</li>
+    <li><strong>Pilot & System Testing Methodology:</strong> Page 131.</li>
+    <li><strong>Record Retrieval Benchmarks (Tables 17, 19):</strong> Pages 146–150.</li>
+    <li><strong>Data Accuracy Comparison (Table 18):</strong> Page 148.</li>
+    <li><strong>ISO/IEC 25010 Evaluation (Tables 25–34):</strong> Pages 164–188.</li>
+    <li><strong>Objective Technical Performance (Table 35):</strong> Page 189.</li>
+  </ul>
+  </p>
+</div>
+
+<!-- SECTION 3: RECONCILED MASTER REVISION SEQUENCE -->
+<div class="section">
+  <div class="section-title">
+    <span>3. Authoritative Reconciled Revision Sequence (REV-01 to REV-18)</span>
+  </div>
+  <p style="color: var(--text-secondary); margin-bottom: 1rem;">This sequence harmonizes both panel matrices into one unified, unambiguous action plan ready for Chapter 1 editing.</p>
+
+  <div class="table-responsive">
+    <table>
+      <thead>
+        <tr>
+          <th>Rev ID</th>
+          <th>Verbatim Panel Comment & Area</th>
+          <th>Exact Manuscript Location</th>
+          <th>Verified Action & Ground-Truth Guidance</th>
+          <th>Priority</th>
+          <th>Status</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><strong>REV-01</strong></td>
+          <td>Chapter 1 – Title & Introduction: Ground problem in actual operating conditions of Shoelotskey Villamor-Pasay.</td>
+          <td>Title Page; Chapter 1, Section 1.1 (pp. 1–3)</td>
+          <td>Standardize title to include Villamor-Pasay branch. Rewrite background to ground operational delays in documented manual logbook practices rather than generic SME claims.</td>
+          <td>High</td>
+          <td><span class="badge badge-success">VERIFIED</span></td>
+        </tr>
+        <tr>
+          <td><strong>REV-02</strong></td>
+          <td>Problem Statement: Establish actual problems identified through pre-assessment and align with quantitative SOP.</td>
+          <td>Chapter 1, Section 1.2 (pp. 3–5)</td>
+          <td>Reconcile baseline retrieval time (5.20 min in trials vs 15–30 min initial estimates) and align SOP questions 1–5 with quantitative metrics reported in Chapter 4.</td>
+          <td>High</td>
+          <td><span class="badge badge-success">VERIFIED</span></td>
+        </tr>
+        <tr>
+          <td><strong>REV-03</strong></td>
+          <td>Scope & Delimitations: Delimit study to Villamor branch and disclose synthetic training dataset.</td>
+          <td>Chapter 1, Section 1.5 (pp. 10–12)</td>
+          <td>Explicitly delimit the scope to Villamor-Pasay branch; state that the ML model was trained on 10,000 simulated records (Dataset B) while counter pilot evaluated 31 live orders.</td>
+          <td>High</td>
+          <td><span class="badge badge-success">VERIFIED</span></td>
+        </tr>
+        <tr>
+          <td><strong>REV-04</strong></td>
+          <td>Conceptual Framework: Revise IPO framework to include ML Regression Engine and evaluation feedback.</td>
+          <td>Chapter 2, Section 2.3 (pp. 20–23)</td>
+          <td>Update IPO diagram: Inputs (12 features), Process (Random Forest Regressor, 300 trees), Output (Advisory Turnaround Days), Evaluation (ISO 25010 & TAM).</td>
+          <td>Medium</td>
+          <td><span class="badge badge-success">VERIFIED</span></td>
+        </tr>
+        <tr>
+          <td><strong>REV-05</strong></td>
+          <td>Review of Related Literature: Remove deprecated models and integrate TAM citations.</td>
+          <td>Chapter 2, Section 2.1–2.2 (pp. 13–20)</td>
+          <td>Remove suggestions of ARIMA/neural networks as production options; justify Random Forest Regressor for tabular workshop management; add 7 TAM references requested by Ma'am Vista.</td>
+          <td>Medium</td>
+          <td><span class="badge badge-success">VERIFIED</span></td>
+        </tr>
+        <tr>
+          <td><strong>REV-06</strong></td>
+          <td>Data Gathering: Delineate Dataset A (provenance) from Dataset B (formal ML training).</td>
+          <td>Chapter 3, Section 3.2 (pp. 35–42)</td>
+          <td>Explicitly separate Dataset A (119 receipts establishing manual baseline) from Dataset B (10,000 synthetic records used for formal ML modeling). Do not combine them.</td>
+          <td>High</td>
+          <td><span class="badge badge-success">VERIFIED</span></td>
+        </tr>
+        <tr>
+          <td><strong>REV-07</strong></td>
+          <td>Simulation Methodology: Document Dataset B generator rules, closures, and zero-noise constraint.</td>
+          <td>Chapter 3, Section 3.3 (pp. 42–48)</td>
+          <td>Document <code>generate_dataset_b.py</code> logic: seed <code>20261002</code>, workshop turnaround tiers, Sunday closures, holiday rollovers. Disclose that zero Gaussian noise was added.</td>
+          <td>High</td>
+          <td><span class="badge badge-success">VERIFIED</span></td>
+        </tr>
+        <tr>
+          <td><strong>REV-08</strong></td>
+          <td>Feature Engineering: Document exact 12 features of Feature Set C and 70/15/15 partition.</td>
+          <td>Chapter 3, Section 3.4 (Table 5, p. 50)</td>
+          <td>Formally document the 12 features of Feature Set C (Table 5) and the 70/15/15 data split (7,000 train, 1,500 val, 1,500 test). Purge all references to queue depth or technician skill.</td>
+          <td>High</td>
+          <td><span class="badge badge-success">VERIFIED</span></td>
+        </tr>
+        <tr>
+          <td><strong>REV-09</strong></td>
+          <td>Implementation Environment: Reconcile 4-tier architecture to verified Heroku production state.</td>
+          <td>Chapter 3, Section 3.6 (pp. 124–127)</td>
+          <td>Replace generic text with verified configuration: React 18.3.1, TypeScript 5.9.3, Vite 6.4.3, FastAPI 0.115.11, PostgreSQL 17.10, single Heroku Basic dyno.</td>
+          <td>High</td>
+          <td><span class="badge badge-success">VERIFIED</span></td>
+        </tr>
+        <tr>
+          <td><strong>REV-10</strong></td>
+          <td>Testing Procedures & Timeline: Establish authentic chronological sequence without retroactive claims.</td>
+          <td>Chapter 3, Section 3.5 (pp. 130–132)</td>
+          <td>Document accurate dates: development Feb–Aug 2026; internal testing June 1–10; counter pilot Sept 2–16 (31 orders); TAM surveys Sept 17–22; Dataset B / ML trained Oct 2–3.</td>
+          <td>High</td>
+          <td><span class="badge badge-success">VERIFIED</span></td>
+        </tr>
+        <tr>
+          <td><strong>REV-11</strong></td>
+          <td>Record Retrieval Benchmarks: Present authentic 10-trial stopwatch comparison.</td>
+          <td>Chapter 4, Section 4.1 (Tables 17 & 19, pp. 146–147)</td>
+          <td>Retain verified 10-trial comparison: Manual Mean = 5.20 min vs Digital Mean = 0.41 min (92.12% reduction, $p < 0.001$). Completely remove 127.8s vs 2.74s figures.</td>
+          <td>High</td>
+          <td><span class="badge badge-success">VERIFIED</span></td>
+        </tr>
+        <tr>
+          <td><strong>REV-12</strong></td>
+          <td>Reporting Performance: Present comparative automated reporting metrics.</td>
+          <td>Chapter 4, Section 4.2 (pp. 148–150)</td>
+          <td>Report reduction in monthly reporting time from 4–6 hours manually to less than 1 minute digitally using real-time dashboard analytics.</td>
+          <td>High</td>
+          <td><span class="badge badge-success">VERIFIED</span></td>
+        </tr>
+        <tr>
+          <td><strong>REV-13</strong></td>
+          <td>Machine Learning Evaluation: Publish sealed Dataset B Random Forest test results.</td>
+          <td>Chapter 4, Section 4.3 (pp. 151–160)</td>
+          <td>Report test metrics ($N=1,500$): $	ext{MAE} = 0.0815	ext{ d}$, $	ext{RMSE} = 0.4042	ext{ d}$, $R^2 = 0.9976$, Bias = $-0.0018	ext{ d}$, $\pm 1	ext{d} = 97.20\%$, $\pm 2	ext{d} = 98.93\%$.</td>
+          <td>High</td>
+          <td><span class="badge badge-success">VERIFIED</span></td>
+        </tr>
+        <tr>
+          <td><strong>REV-14</strong></td>
+          <td>Operational Architecture: Differentiate rule-based Standard Release Date from ML Advisory Date.</td>
+          <td>Chapter 4, Section 4.4 (pp. 161–163)</td>
+          <td>Clarify dual-date architecture: Standard Date (authoritative SLA customer commitment printed on claim slips) vs implemented operational ML Predicted Date (turnaround prediction component; simulated evaluation does not establish real-world accuracy).</td>
+          <td>High</td>
+          <td><span class="badge badge-success">VERIFIED</span></td>
+        </tr>
+        <tr>
+          <td><strong>REV-15</strong></td>
+          <td>Software Quality Standards: Report 4-point ISO/IEC 25010 ratings from 5 IT experts.</td>
+          <td>Chapter 4, Section 4.5 (Tables 25–34, pp. 164–188)</td>
+          <td>Report itemized scores from 5 IT experts on a 4-point Likert scale (Means: 3.64 to 3.84, "Highly Acceptable"). Supplement with objective technical testing (Table 35, p. 189).</td>
+          <td>High</td>
+          <td><span class="badge badge-success">VERIFIED</span></td>
+        </tr>
+        <tr>
+          <td><strong>REV-16</strong></td>
+          <td>Study Limitations: Formulate simulation boundary caveat and prospective data requirements.</td>
+          <td>Chapter 5, Section 5.3 (pp. 205–207)</td>
+          <td>Explicitly state that high test accuracy reflects learning deterministic simulation rules. State that real-world predictive validity requires logging prospective customer pickup timestamps.</td>
+          <td>High</td>
+          <td><span class="badge badge-success">VERIFIED</span></td>
+        </tr>
+        <tr>
+          <td><strong>REV-17</strong></td>
+          <td>Recommendations: Derive actionable recommendations directly from documented findings.</td>
+          <td>Chapter 5, Section 5.4 (pp. 208–210)</td>
+          <td>Propose 4 grounded recommendations: (1) mandatory pickup timestamp logging, (2) periodic model retraining on empirical orders, (3) barcode scanner integration, (4) multi-branch rollout.</td>
+          <td>Medium</td>
+          <td><span class="badge badge-success">VERIFIED</span></td>
+        </tr>
+        <tr>
+          <td><strong>REV-18</strong></td>
+          <td>Appendices: Populate traceable evidence tables in manuscript appendices.</td>
+          <td>Appendices (pp. 211–227)</td>
+          <td>Populate Appendices with: 10 paired retrieval trials log (App F), reporting benchmarks (App G), Dataset B feature dictionary (App H), and verified production environment (App I).</td>
+          <td>High</td>
+          <td><span class="badge badge-success">VERIFIED</span></td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<footer style="margin-top: 3rem; text-align: center; color: var(--text-muted); font-size: 0.8rem; border-top: 1px solid var(--border); padding-top: 1.5rem;">
+  Shoelotskey Service Management System · Independent Evidence Conflict Resolution Audit · October 13, 2026
+</footer>
+
+</div>
+</body>
+</html>

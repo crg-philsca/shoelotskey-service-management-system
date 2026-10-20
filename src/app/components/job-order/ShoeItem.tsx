@@ -10,7 +10,7 @@ import { formatPeso } from '@/app/lib/utils';
 import { useServices } from '@/app/context/ServiceContext';
 import { useInventory } from '@/app/context/InventoryContext';
 import { getInventoryPresentation } from '@/app/lib/inventoryPresentation';
-import { isAddonVisibleForBaseServices, applyColorCountExclusive, syncColorRenewalAddons, syncFullReglueAddons, isColorCountAddon } from '@/app/lib/serviceCompatibility';
+import { isAddonVisibleForBaseServices, applyColorCountExclusive, syncColorRenewalAddons, syncFullReglueAddons, isColorCountAddon, isFullReglueSoleAddon, getSoleAddonPricingDisplay, sortAddonsForDisplay } from '@/app/lib/serviceCompatibility';
 
 interface ShoeItemProps {
     shoe: any;
@@ -20,6 +20,77 @@ interface ShoeItemProps {
 }
 
 const LABEL_STYLE = "text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1 shadow-sm drop-shadow-sm";
+
+const BRAND_MODELS: Record<string, string[]> = {
+    'Nike': ['Air Force 1', 'Dunk Low', 'Air Max 90', 'Air Max 97', 'Cortez', 'Blazer', 'Pegasus', 'Other'],
+    'Jordan': ['Air Jordan 1', 'Air Jordan 3', 'Air Jordan 4', 'Air Jordan 11', 'Other'],
+    'Adidas': ['Superstar', 'Stan Smith', 'Ultraboost', 'Yeezy Boost 350', 'Samba', 'Gazelle', 'NMD', 'Other'],
+    'Vans': ['Old Skool', 'Slip-On', 'Sk8-Hi', 'Authentic', 'Era', 'Other'],
+    'Converse': ['Chuck Taylor All Star', 'Chuck 70', 'One Star', 'Run Star Hike', 'Other'],
+    'New Balance': ['550', '990', '2002R', '574', '327', '9060', 'Other'],
+    'Asics': ['Gel-Kayano', 'Gel-Lyte III', 'Gel-Nimbus', 'Other'],
+    'Puma': ['Suede', 'RS-X', 'Cali', 'Rider', 'Other'],
+    'Reebok': ['Club C 85', 'Classic Leather', 'Instapump Fury', 'Other'],
+    'Under Armour': ['Curry', 'HOVR', 'Charged', 'Other'],
+    'Timberland': ['6-Inch Premium Boot', 'Chukka', 'Boat Shoe', 'Other'],
+    'Dr. Martens': ['1460 8-Eye Boot', '1461 3-Eye Shoe', 'Jadon', 'Chelsea Boot', 'Other'],
+    'Salomon': ['XT-6', 'Speedcross', 'Other'],
+    'Merrell': ['Moab', 'Jungle Moc', 'Other'],
+    'Skechers': ['D\'Lites', 'Go Walk', 'Uno', 'Other'],
+    'Mizuno': ['Wave Rider', 'Wave Inspire', 'Other'],
+    'Brooks': ['Ghost', 'Adrenaline GTS', 'Glycerin', 'Other'],
+    'Saucony': ['Jazz Original', 'Kinvara', 'Shadow', 'Other'],
+    'Hoka': ['Clifton', 'Bondi', 'Speedgoat', 'Other'],
+    'On Cloud': ['Cloudmonster', 'Cloudnova', 'Cloudstratus', 'Cloud 5', 'Other']
+};
+
+const SHOE_BRANDS = Object.keys(BRAND_MODELS);
+const ALL_MODELS = Object.values(BRAND_MODELS).flat().filter(m => m !== 'Other');
+const MODEL_TO_BRAND: Record<string, string> = {};
+Object.entries(BRAND_MODELS).forEach(([brand, models]) => {
+    models.forEach(model => {
+        if (model !== 'Other' && !MODEL_TO_BRAND[model]) {
+            MODEL_TO_BRAND[model] = brand;
+        }
+    });
+});
+
+const MODEL_MATERIALS: Record<string, string> = {
+    'Air Force 1': 'Leather',
+    'Dunk Low': 'Leather',
+    'Air Max 90': 'Mesh',
+    'Air Max 97': 'Mesh',
+    'Cortez': 'Leather',
+    'Blazer': 'Leather',
+    'Air Jordan 1': 'Leather',
+    'Air Jordan 3': 'Leather',
+    'Air Jordan 4': 'Leather',
+    'Air Jordan 11': 'Patent Leather',
+    'Superstar': 'Leather',
+    'Stan Smith': 'Leather',
+    'Samba': 'Leather',
+    'Ultraboost': 'Knit',
+    'Yeezy Boost 350': 'Knit',
+    'Gazelle': 'Suede',
+    'Club C 85': 'Leather',
+    'Classic Leather': 'Leather',
+    'Old Skool': 'Canvas',
+    'Slip-On': 'Canvas',
+    'Sk8-Hi': 'Canvas',
+    'Authentic': 'Canvas',
+    'Chuck Taylor All Star': 'Canvas',
+    'Chuck 70': 'Canvas',
+    '550': 'Leather',
+    '574': 'Suede',
+    '990': 'Suede',
+    '2002R': 'Suede',
+    'Gel-Lyte III': 'Suede',
+    'Gel-Kayano': 'Mesh',
+    'Gel-Nimbus': 'Mesh',
+    'Suede': 'Suede',
+    '6-Inch Premium Boot': 'Nubuck',
+    '1460 8-Eye Boot': 'Leather'
+};
 
 export const ShoeItem: React.FC<ShoeItemProps> = ({ shoe, index, updateShoe, removeShoe }) => {
     const { services } = useServices();
@@ -65,19 +136,63 @@ export const ShoeItem: React.FC<ShoeItemProps> = ({ shoe, index, updateShoe, rem
                                     <Label className={LABEL_STYLE}>Brand</Label>
                                     <Input
                                         placeholder="e.g. Nike"
+                                        list={`brand-options-${shoe.id}`}
                                         value={shoe.brand}
-                                        onChange={(e) => updateShoe(shoe.id, { brand: e.target.value })}
+                                        onChange={(e) => {
+                                            const newBrand = e.target.value;
+                                            const updates: any = { brand: newBrand };
+                                            if (newBrand && shoe.shoeModel) {
+                                                const modelBrand = MODEL_TO_BRAND[shoe.shoeModel];
+                                                if (modelBrand && modelBrand !== newBrand) {
+                                                    updates.shoeModel = '';
+                                                    updates.shoeMaterial = '';
+                                                } else if (BRAND_MODELS[newBrand] && !BRAND_MODELS[newBrand].includes(shoe.shoeModel)) {
+                                                    updates.shoeModel = '';
+                                                    updates.shoeMaterial = '';
+                                                }
+                                            }
+                                            updateShoe(shoe.id, updates);
+                                        }}
                                         className="h-10 bg-white border-gray-100/50 rounded-xl text-xs font-bold text-gray-700 shadow-sm transition-all focus:border-red-200"
                                     />
+                                    <datalist id={`brand-options-${shoe.id}`}>
+                                        {SHOE_BRANDS.map((b) => (
+                                            <option key={b} value={b} />
+                                        ))}
+                                    </datalist>
                                 </div>
                                 <div className="space-y-1">
                                     <Label className={LABEL_STYLE}>Shoe Model</Label>
                                     <Input
                                         placeholder="e.g. Dunk Low Panda"
+                                        list={`model-options-${shoe.id}`}
                                         value={shoe.shoeModel}
-                                        onChange={(e) => updateShoe(shoe.id, { shoeModel: e.target.value })}
+                                        onChange={(e) => {
+                                            const val = e.target.value;
+                                            if (!shoe.brand && MODEL_TO_BRAND[val]) {
+                                                updateShoe(shoe.id, {
+                                                    brand: MODEL_TO_BRAND[val],
+                                                    shoeModel: val,
+                                                    shoeMaterial: MODEL_MATERIALS[val] || shoe.shoeMaterial,
+                                                });
+                                                return;
+                                            }
+                                            const updates: any = { shoeModel: val };
+                                            if (MODEL_MATERIALS[val]) {
+                                                updates.shoeMaterial = MODEL_MATERIALS[val];
+                                            }
+                                            updateShoe(shoe.id, updates);
+                                        }}
                                         className="h-10 bg-white border-gray-100/50 rounded-xl text-xs font-bold text-gray-700 shadow-sm transition-all focus:border-red-200"
                                     />
+                                    <datalist id={`model-options-${shoe.id}`}>
+                                        {(shoe.brand && BRAND_MODELS[shoe.brand]
+                                            ? BRAND_MODELS[shoe.brand]
+                                            : ALL_MODELS
+                                        ).map((m) => (
+                                            <option key={m} value={m} />
+                                        ))}
+                                    </datalist>
                                 </div>
                                 <div className="space-y-1">
                                     <Label className={LABEL_STYLE}>Material</Label>
@@ -137,7 +252,7 @@ export const ShoeItem: React.FC<ShoeItemProps> = ({ shoe, index, updateShoe, rem
                                         {baseServices.map((service) => {
                                             const isChecked = (Array.isArray(shoe.baseService) ? shoe.baseService : []).includes(service.name);
                                             return (
-                                                <label key={service.id} className={`flex ${isChecked ? 'items-start' : 'items-center'} space-x-2 p-2.5 rounded-lg border transition-all cursor-pointer shadow-sm ${isChecked ? 'border-red-100 bg-red-50/10' : 'bg-white border-gray-100 hover:border-red-100'}`}>
+                                                <label key={service.id} className={`flex ${isChecked ? 'items-start min-h-[64px]' : 'items-center min-h-[58px]'} space-x-2 p-2.5 rounded-lg border transition-all cursor-pointer shadow-sm ${isChecked ? 'border-red-100 bg-red-50/10' : 'bg-white border-gray-100 hover:border-red-100'}`}>
                                                     <Checkbox
                                                         checked={isChecked}
                                                         onCheckedChange={(checked) => {
@@ -194,14 +309,30 @@ export const ShoeItem: React.FC<ShoeItemProps> = ({ shoe, index, updateShoe, rem
                                                         }}
                                                         className={`h-4 w-4 shrink-0 ${isChecked ? 'self-start mt-0.5' : ''} data-[state=checked]:bg-red-600 data-[state=checked]:border-red-600`}
                                                     />
-                                                    <div className="flex items-center justify-between flex-1 min-w-0">
-                                                        <div className="flex flex-col min-w-0">
+                                                    <div className="flex flex-col min-w-0 flex-1">
+                                                        <div className="flex items-center justify-between gap-1 min-w-0">
                                                             <span className="text-[11px] font-bold leading-tight text-gray-700 truncate">
                                                                 {service.name}
                                                             </span>
+                                                            {service.code && (
+                                                                <span className="text-[8px] font-black text-gray-400 bg-gray-100 px-1 py-0.5 rounded uppercase tracking-wider shrink-0 ml-auto">
+                                                                    {service.code}
+                                                                </span>
+                                                            )}
                                                         </div>
+                                                        {isChecked && (service.name === 'Full Reglue' || service.name === 'Color Renewal') && (
+                                                            <div className="mt-0.5 min-w-0">
+                                                                <span className="text-[8.5px] font-semibold text-amber-700 leading-tight block break-words" title={service.name === 'Full Reglue' ? "Select Midsole or Undersole" : "Select 2 Colors or 3 Colors"}>
+                                                                    {service.name === 'Full Reglue' ? "Select Midsole or Undersole" : "Select 2 Colors or 3 Colors"}
+                                                                </span>
+                                                            </div>
+                                                        )}
                                                         {isChecked && (
-                                                            <span className="text-[11px] font-black text-red-600 shrink-0 ml-2">{formatPeso(service.price)}</span>
+                                                            <div className="flex items-center justify-end mt-1 min-w-0">
+                                                                <span className="text-[11px] font-black text-red-600 shrink-0 ml-auto whitespace-nowrap">
+                                                                    {service.price > 0 ? formatPeso(service.price) : 'Price varies'}
+                                                                </span>
+                                                            </div>
                                                         )}
                                                     </div>
                                                 </label>
@@ -217,15 +348,16 @@ export const ShoeItem: React.FC<ShoeItemProps> = ({ shoe, index, updateShoe, rem
                                             <span className="text-xs font-bold italic text-gray-300 uppercase tracking-widest">Awaiting Base Service</span>
                                         </div>
                                     ) : (
-                                        <div className="grid grid-cols-2 gap-2 flex-grow overflow-y-auto max-h-[220px] pr-1 custom-scrollbar">
-                                            {addOnServices
-                                                .filter(addon => isAddonVisibleForBaseServices(addon.name, shoe.baseService || [], services))
-                                                .sort((a, b) => (Number(a.sortOrder) || 999) - (Number(b.sortOrder) || 999)).map((addon) => {
+                                        <div className="grid grid-cols-2 gap-2 flex-grow overflow-y-auto max-h-[114px] pr-1.5 addon-scrollbar">
+                                            {sortAddonsForDisplay(
+                                                addOnServices.filter(addon => isAddonVisibleForBaseServices(addon.name, shoe.baseService || [], services)),
+                                                shoe.baseService || []
+                                            ).map((addon) => {
                                                 const isChecked = shoe.addOns.some((a: any) => a.name === addon.name);
                                                 const addonItem = shoe.addOns.find((a: any) => a.name === addon.name);
                                                 const quantity = addonItem?.quantity || 1;
                                                 return (
-                                                    <div key={addon.id} className={`flex flex-col p-2.5 rounded-lg border bg-white transition-all ${isChecked ? 'border-red-100 bg-red-50/10' : 'border-gray-50'} gap-2 shadow-sm`}>
+                                                    <div key={addon.id} className={`flex flex-col justify-center px-2 py-1.5 rounded-lg border bg-white transition-all h-[52px] ${isChecked ? 'border-red-100 bg-red-50/10' : 'border-gray-50'} shadow-sm`}>
                                                         <div className="flex items-center space-x-2">
                                                             <Checkbox
                                                                 checked={isChecked}
@@ -247,10 +379,10 @@ export const ShoeItem: React.FC<ShoeItemProps> = ({ shoe, index, updateShoe, rem
                                                                 }}
                                                                 className="h-4 w-4 data-[state=checked]:bg-red-600 data-[state=checked]:border-red-600"
                                                             />
-                                                            <span className="text-[11px] font-bold text-gray-600">{addon.name}</span>
+                                                            <span className="text-[11px] font-bold text-gray-600 truncate">{addon.name}</span>
                                                         </div>
                                                         {isChecked && (
-                                                            <div className="flex items-center justify-between border-t border-gray-100 pt-1.5 mt-1.5">
+                                                            <div className="flex items-center justify-between border-t border-gray-100 pt-1 mt-1">
                                                                 {Boolean(addon.hasSpinner ?? ((addon.name || '').toLowerCase() === 'unyellowing' || (addon.name || '').toLowerCase() === 'white paint')) ? (
                                                                     <input
                                                                         type="number"
@@ -264,10 +396,22 @@ export const ShoeItem: React.FC<ShoeItemProps> = ({ shoe, index, updateShoe, rem
                                                                             );
                                                                             updateShoe(shoe.id, { addOns: newAddOns });
                                                                         }}
-                                                                        className="w-10 h-6 border-none bg-gray-50 rounded text-[10px] font-black text-center focus:outline-none"
+                                                                        className="w-9 h-4.5 border border-gray-200 rounded text-[10px] font-bold text-center focus:outline-none focus:border-red-500 bg-white px-0"
                                                                     />
                                                                 ) : <div />}
-                                                                <span className="text-[11px] font-black text-red-600 ml-auto">{formatPeso(getAddonTotal(addon.name, quantity))}</span>
+                                                                {(() => {
+                                                                    const isFR = (shoe.baseService || []).includes('Full Reglue');
+                                                                    const isSole = isFullReglueSoleAddon(addon.name);
+                                                                    if (isFR && isSole) {
+                                                                        const solePricing = getSoleAddonPricingDisplay(addon.name, shoe.addOns || [], shoe.baseService || []);
+                                                                        return (
+                                                                            <span className="text-[11px] font-black text-red-600 ml-auto">
+                                                                                {solePricing.displayLabel}
+                                                                            </span>
+                                                                        );
+                                                                    }
+                                                                    return <span className="text-[11px] font-black text-red-600 ml-auto">{formatPeso(getAddonTotal(addon.name, quantity))}</span>;
+                                                                })()}
                                                             </div>
                                                         )}
                                                     </div>

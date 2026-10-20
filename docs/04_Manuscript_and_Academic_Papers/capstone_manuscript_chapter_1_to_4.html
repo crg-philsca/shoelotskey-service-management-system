@@ -267,21 +267,86 @@
     <p>The system logs events such as user authentication attempts, job order creation, service status updates, report generation, and user account modifications. Each log entry includes relevant details, such as the user responsible for the action, the activity performed, and the event timestamp.</p>
 
     <h3>Implementation Environment and Technology Stack</h3>
-    <p>The implementation environment and technology stack describe the technological infrastructure used to develop, deploy, and operate the proposed web-based system. The system is built using modern web technologies that support efficient application development, secure data management, and reliable system performance.</p>
+    <p>The implementation environment and technology stack specify the operational infrastructure, software dependencies, runtime configurations, and hardware equipment utilized to develop, deploy, and evaluate the Web-Based Service Management System with Data Analytics Using Machine Learning Algorithms for Shoelotskey. To guarantee reproducibility, transparency, and research integrity, the software architecture distinguishes between dependency constraints declared in repository manifests, exact versions locked in deployment lockfiles, local development environments, and verified cloud production configurations.</p>
 
-    <h3>Software Requirements</h3>
-    <p>The system requires a web server platform capable of hosting the application and processing user requests. Server-side software handles system logic, data processing, and machine-learning analytics to analyze historical service records. A relational database management system is required to store and manage system data, including job orders, service records, transaction details, and user account information.</p>
+    <h3>Software Requirements and Layered Architecture</h3>
+    <p>The software architecture follows a decoupled, three-tier client-server structure consisting of a Presentation Layer, an Application Processing Layer, and a Data Persistence Layer, integrated with a specialized Machine Learning Predictive Module and cloud security mechanisms.</p>
+    <p><strong>Presentation Layer (Front-End User Interface):</strong> The client interface is constructed as a Single-Page Application (SPA) using React (Version 18.3.1, locked) with TypeScript (Version 5.9.3, locked) to enforce compile-time type safety across complex job order, customer, and inventory data structures. Vite (Version 6.4.3, locked) serves as the frontend build tool and development server, utilizing esbuild for optimized static asset bundling and rapid Hot Module Replacement (HMR). Interface styling is implemented using Tailwind CSS (Version 4.1.12, locked), providing a responsive, utility-first design optimized for both desktop terminals and mobile viewports. Lucide React (Version 1.16.0, locked) is integrated to supply accessible, uniform iconography across dashboard cards, navigation bars, and modal dialogues.</p>
+    <p><strong>Application Layer (Back-End Web Service):</strong> The application logic is developed in Python (local development: Python 3.14.3; production runtime: Python 3.11.11 / Python 3.12 series) utilizing the FastAPI web framework (declared constraint: &ge;0.110.0; local installed: 0.135.1). FastAPI provides native Asynchronous Server Gateway Interface (ASGI) execution, non-blocking I/O handling, and automated data validation powered by Pydantic (declared constraint: &ge;2.6.4; local installed: 2.12.5). In production, the service is executed via the Gunicorn (Version 25.1.0, declared) WSGI HTTP server managing asynchronous Uvicorn worker processes (declared constraint: &ge;0.28.0; local installed: 0.42.0) to handle concurrent POS transactions and report generation requests reliably.</p>
+    <p><strong>Data Layer (Relational Database Management):</strong> Operational persistence is managed using PostgreSQL 17 (verified live cloud production: PostgreSQL 17.10 on Heroku Postgres Essential-0; local development mirror: SQLite 3.50.4). The database structure enforces Third Normal Form (3NF) across 38 relational tables, guaranteeing full ACID compliance, primary/foreign key constraints, and cascade protections for financial and operational records. Object-relational mapping and schema transactions are coordinated via SQLAlchemy ORM (declared constraint: &ge;2.0.28; local installed: 2.0.48) with Psycopg 3 (psycopg2-binary / psycopg 3.3.3) functioning as the high-performance PostgreSQL database adapter.</p>
+    <p><strong>Machine Learning Predictive Module:</strong> Completion timeline forecasting is implemented using the Scikit-Learn library in Python. The operational model employs an optimized Random Forest Regressor configured with 300 estimators, a maximum tree depth of 12, a minimum of 10 samples to split, a minimum of 4 samples per leaf, full feature sampling (max_features = 1.0), and a locked random seed (20261002). The model operates on Feature Set C, comprising exactly 12 service and temporal predictors (total pairs, basic cleaning quantity, full reglue quantity, minor reglue quantity, unyellowing quantity, minor restoration quantity, color renewal quantity, rush indicator, distinct service types, total service applications, intake day of week, and intake month). To eliminate severe distortions caused by historical customer pickup latency (where customers left shoes unclaimed for up to 60 days), the production model was trained and evaluated exclusively on Dataset B, a verified simulated operational dataset comprising 10,000 synthetic service records partitioned into 7,000 training, 1,500 validation, and 1,500 sealed test rows, achieving a test Mean Absolute Error (MAE) of 0.0815 days (&approx; 1.96 hours).</p>
+    <p><strong>Security, Authentication, and Session Management:</strong> User authentication is implemented via stateless OAuth2 Bearer JSON Web Tokens (JWT) signed with HMAC-SHA256 secrets. User credentials are protected using the salted Bcrypt cryptographic hashing algorithm (Version 5.0.0, locked), preventing credential exposure in database archives. A dual-tier brute-force mitigation system enforces a temporary 15-minute account lockout upon three consecutive failed authentication attempts, while granting anti-DoS lockout immunity to the administrative account. System authorization is governed by granular Role-Based Access Control (RBAC) matrices, strictly restricting financial ledgers, expense logs, user account modifications, and immutable audit trails to authorized shop owner profiles.</p>
+    <p><strong>Third-Party Communication Integration:</strong> The system incorporates the Mailgun RESTful API to support automated transactional email delivery for user password resets and system notifications. When operating in local test or defense environments lacking active Mailgun API keys, the system executes a safe console logging fallback mode without interrupting workflow processing.</p>
 
     <h3>Hardware Requirements</h3>
-    <p>The hardware requirements for the proposed system include computing devices capable of accessing web-based applications and supporting internet connectivity. The owner and staff members will use desktop or laptop computers equipped with modern web browsers to interact with the system interface.</p>
+    <p>The operational implementation does not require capital-intensive on-premise server hardware, making the architecture economically feasible for small service enterprises:</p>
+    <ul>
+        <li><strong>Client Workstation (Shop Counter Terminal):</strong> Desktop or laptop computing device equipped with a multi-core processor (AMD Ryzen 5 7520U or Intel Core i3/i5 equivalent), minimum 8 GB of RAM (16 GB utilized during testing), a modern Chromium- or WebKit-based web browser (Google Chrome Version 154+ or Microsoft Edge Version 153+), and an active internet connection (minimum 10 Mbps; 50 Mbps PLDT Wi-Fi utilized during trials).</li>
+        <li><strong>Server Infrastructure:</strong> Fully cloud-hosted virtualized container hypervisor provided by the Heroku Platform-as-a-Service (PaaS), eliminating physical server procurement, local cooling, and on-premise hardware maintenance.</li>
+    </ul>
 
-    <h3>Development Tools and Programming Technologies</h3>
-    <p>The frontend of the system is built using React with TypeScript to ensure structured and maintainable code. Vite is used to support fast development and efficient system performance, while Tailwind CSS provides a clean, responsive, and user-friendly interface design. Lucide React is integrated to maintain a consistent and professional set of icons.</p>
-    <p>The backend is developed using Python with the FastAPI framework. This setup allows the system to handle multiple user requests efficiently while enforcing business rules and processing system logic. For data storage, the system uses a PostgreSQL relational database. SQLAlchemy ORM is applied to manage database operations.</p>
-    <p>The system’s predictive analytics feature is implemented using the Scikit-Learn library. A Random Forest regression model is used to estimate service completion timelines based on historical service data.</p>
+    <h3>Deployment Architecture and Production Configuration</h3>
+    <p>In contrast to traditional multi-server deployments, the production system is hosted on the Heroku cloud platform utilizing a <strong>single shared Heroku Basic web dyno</strong> (512 MB RAM container). The compiled React frontend static assets (located in the <code>dist/</code> directory) are mounted directly and served by the FastAPI application service. This consolidated architecture eliminates cross-dyno network latency, prevents Cross-Origin Resource Sharing (CORS) preflight overhead, and minimizes monthly operating expenditures for small-scale shop operations.</p>
+    <p>Cloud database services are hosted on the <strong>Heroku Postgres Essential-0 plan</strong> (PostgreSQL 17.10, multi-tenant container supporting up to 20 concurrent connections and 1 GB of storage). End-to-end communication security is provided via Heroku Automated Certificate Management (ACM), which provisions and auto-renews managed TLS certificates to enforce HTTPS data-in-transit encryption across all client-server communications.</p>
+    <p>To preserve historical traceability, the manuscript acknowledges three distinct software deployment milestones: (1) the initial shop pilot implementation conducted from September 2 to 16, 2026, and subsequent evaluator testing from September 17 to 22, 2026; (2) the formal manuscript reference configuration frozen on October 7, 2026 (Heroku Release <code>v150</code>, Git Commit <code>1f93846c</code>); and (3) the reported active production configuration as of October 10, 2026 (Heroku Release <code>v152</code>, Git Commit <code>777f8efb</code>). The October Random Forest model was finalized and serialized after the September pilot and was not evaluated by September participants. Table 16 summarizes the implementation environment specifications.</p>
 
-    <h3>Deployment Environment</h3>
-    <p>The proposed system is deployed within a secure, cloud-based web environment. For production, the system is hosted on the Heroku cloud platform, where both frontend and backend components are deployed using dedicated dynos to ensure stable and efficient execution. The application’s database is managed via Heroku Postgres, which provides high availability, automated backups, and secure database connections.</p>
+    <p class="no-indent" style="font-weight: bold; margin-top: 20px;">Table 16</p>
+    <p class="no-indent" style="font-style: italic; margin-bottom: 10px;">Implementation Environment and Technology Stack Specifications</p>
+    <table>
+        <thead>
+            <tr>
+                <th style="width: 20%;">Component</th>
+                <th style="width: 25%;">Technology</th>
+                <th style="width: 25%;">Version / Configuration</th>
+                <th style="width: 30%;">Purpose in System</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr>
+                <td>Presentation Layer</td>
+                <td>React with TypeScript<br>Vite Build Engine<br>Tailwind CSS<br>Lucide React</td>
+                <td>React 18.3.1 (Locked)<br>TS 5.9.3, Vite 6.4.3<br>Tailwind 4.1.12<br>Lucide React 1.16.0</td>
+                <td>Single-Page Application client interface, compile-time type validation, responsive styling, and accessible UI iconography.</td>
+            </tr>
+            <tr>
+                <td>Application Layer</td>
+                <td>Python<br>FastAPI Framework<br>Gunicorn / Uvicorn</td>
+                <td>Python 3.11+ / 3.14.3<br>FastAPI &ge;0.110.0 (Local 0.135.1)<br>Gunicorn 25.1.0, Uvicorn 0.42.0</td>
+                <td>Asynchronous RESTful API backend processing, non-blocking I/O operations, Pydantic data validation, and OpenAPI documentation.</td>
+            </tr>
+            <tr>
+                <td>Data Layer</td>
+                <td>PostgreSQL<br>SQLAlchemy ORM<br>Psycopg 3 Adapter</td>
+                <td>PostgreSQL 17.10 (Production)<br>SQLAlchemy &ge;2.0.28 (Local 2.0.48)<br>psycopg2-binary / psycopg 3.3.3</td>
+                <td>ACID-compliant relational database management across 38 tables, object-relational mapping, and connection pooling.</td>
+            </tr>
+            <tr>
+                <td>Machine Learning Module</td>
+                <td>Scikit-Learn<br>Random Forest Regressor<br>Dataset B</td>
+                <td>300 Trees, Depth 12, Seed 20261002<br>Feature Set C (12 Predictors)<br>10,000 Synthetic Operational Records</td>
+                <td>Predicts service completion timelines without customer pickup latency (Test MAE: 0.0815 days / 1.96 hours, R&sup2; = 0.9976).</td>
+            </tr>
+            <tr>
+                <td>Security & Access Control</td>
+                <td>OAuth2 JWT<br>Bcrypt Hashing<br>Role-Based Access Control</td>
+                <td>HMAC-SHA256 Signing<br>Bcrypt 5.0.0 (Locked)<br>Owner / Staff / Admin Roles</td>
+                <td>Stateless authentication tokens, salted password hashing, 15-minute brute-force lockout, and endpoint permission enforcement.</td>
+            </tr>
+            <tr>
+                <td>Cloud Infrastructure</td>
+                <td>Heroku PaaS<br>Heroku Postgres<br>Managed TLS (ACM)<br>Mailgun API</td>
+                <td>1x Basic Web Dyno (512 MB)<br>Essential-0 Plan (15.8 MB, 38 Tables)<br>Automated Certificate Management<br>REST API / Mock Console Fallback</td>
+                <td>Unified container hosting FastAPI and serving compiled static assets, cloud database persistence, HTTPS encryption, and email dispatch.</td>
+            </tr>
+            <tr>
+                <td>Client Hardware</td>
+                <td>Counter Workstation<br>Shop Network</td>
+                <td>AMD Ryzen 5 / Intel Core i3+, 8–16 GB RAM<br>Modern Browser, 50 Mbps Wi-Fi</td>
+                <td>Shop counter point-of-sale data entry, receipt generation, operational status updates, and analytics monitoring.</td>
+            </tr>
+        </tbody>
+    </table>
+    <p class="no-indent" style="font-size: 10pt; font-style: italic; margin-top: -10px; margin-bottom: 20px;">Note. Production release v150 (Commit 1f93846c, October 7, 2026) represents the manuscript baseline; release v152 (Commit 777f8efb, October 10, 2026) represents the active cloud configuration. Operational pilot evaluation occurred September 2–16, 2026. Detailed seven-column dependency verification matrices are documented in the Technical Audit Attachment.</p>
 </div>
 
 <!-- CHAPTER 4 -->

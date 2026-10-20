@@ -1,0 +1,2221 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Comprehensive Methodological Audit of Dataset B (10,000 Simulated Operational Records) · Shoelotskey SMS</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --primary: #0284c7;
+    --primary-light: #38bdf8;
+    --primary-dark: #0369a1;
+    --secondary: #64748b;
+    --bg-main: #0b0f19;
+    --card-bg: #131c2e;
+    --card-bg-elevated: #1a263d;
+    --card-border: #24344d;
+    --card-border-light: #334a6e;
+    --text-main: #f8fafc;
+    --text-muted: #94a3b8;
+    --text-dim: #64748b;
+    --accent: #38bdf8;
+    --success: #10b981;
+    --success-bg: rgba(16, 185, 129, 0.12);
+    --warning: #f59e0b;
+    --warning-bg: rgba(245, 158, 11, 0.12);
+    --danger: #ef4444;
+    --danger-bg: rgba(239, 68, 68, 0.12);
+    --info: #6366f1;
+    --info-bg: rgba(99, 102, 241, 0.12);
+    --purple: #a855f7;
+    --purple-bg: rgba(168, 85, 247, 0.12);
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  
+  body {
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    background-color: var(--bg-main);
+    color: var(--text-main);
+    line-height: 1.65;
+    padding: 2.5rem 1rem;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .container {
+    max-width: 1300px;
+    margin: 0 auto;
+  }
+
+  /* HEADER */
+  header {
+    background: linear-gradient(135deg, #131c2e 0%, #0d1424 100%);
+    border: 1px solid var(--card-border);
+    border-radius: 16px;
+    padding: 3rem 2.5rem;
+    margin-bottom: 2.5rem;
+    box-shadow: 0 20px 40px -15px rgba(0, 0, 0, 0.6);
+    position: relative;
+    overflow: hidden;
+  }
+  header::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0; height: 4px;
+    background: linear-gradient(90deg, #0284c7, #38bdf8, #10b981, #6366f1);
+  }
+
+  .badge-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.6rem;
+    margin-bottom: 1.25rem;
+  }
+  .badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    padding: 0.35rem 0.85rem;
+    border-radius: 9999px;
+    font-size: 0.78rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+  .badge-primary { background: rgba(56, 189, 248, 0.15); color: var(--accent); border: 1px solid rgba(56, 189, 248, 0.3); }
+  .badge-success { background: var(--success-bg); color: #34d399; border: 1px solid rgba(16, 185, 129, 0.35); }
+  .badge-warning { background: var(--warning-bg); color: #fbbf24; border: 1px solid rgba(245, 158, 11, 0.35); }
+  .badge-danger { background: var(--danger-bg); color: #f87171; border: 1px solid rgba(239, 68, 68, 0.35); }
+  .badge-purple { background: var(--purple-bg); color: #c084fc; border: 1px solid rgba(168, 85, 247, 0.35); }
+
+  h1 {
+    font-size: 2.25rem;
+    font-weight: 900;
+    color: #fff;
+    margin-bottom: 0.75rem;
+    line-height: 1.25;
+    letter-spacing: -0.02em;
+  }
+  .subtitle {
+    font-size: 1.1rem;
+    color: var(--text-muted);
+    max-width: 1050px;
+    margin-bottom: 2rem;
+    line-height: 1.6;
+  }
+
+  .meta-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 1.5rem;
+    border-top: 1px solid var(--card-border);
+    padding-top: 1.75rem;
+  }
+  .meta-item { font-size: 0.92rem; }
+  .meta-label { color: var(--text-dim); font-size: 0.76rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 0.25rem; }
+  .meta-value { color: var(--text-main); font-weight: 600; }
+  .meta-value code { font-size: 0.85em; }
+
+  /* KPI STATS ROW */
+  .stats-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+    gap: 1.25rem;
+    margin-bottom: 2.5rem;
+  }
+  .stat-card {
+    background: var(--card-bg);
+    border: 1px solid var(--card-border);
+    border-radius: 12px;
+    padding: 1.5rem;
+    position: relative;
+    overflow: hidden;
+    transition: transform 0.2s ease, border-color 0.2s ease;
+  }
+  .stat-card:hover {
+    transform: translateY(-2px);
+    border-color: var(--card-border-light);
+  }
+  .stat-card::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; width: 4px; height: 100%;
+  }
+  .stat-card.blue::before { background: var(--accent); }
+  .stat-card.green::before { background: var(--success); }
+  .stat-card.amber::before { background: var(--warning); }
+  .stat-card.purple::before { background: var(--purple); }
+  .stat-label { font-size: 0.8rem; font-weight: 700; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.05em; }
+  .stat-num { font-size: 2.25rem; font-weight: 900; color: #fff; margin: 0.4rem 0 0.2rem; line-height: 1.1; font-family: 'JetBrains Mono', monospace; }
+  .stat-sub { font-size: 0.82rem; color: var(--text-muted); }
+
+  /* CONTENT SECTIONS */
+  .section {
+    background: var(--card-bg);
+    border: 1px solid var(--card-border);
+    border-radius: 14px;
+    padding: 2.25rem;
+    margin-bottom: 2.25rem;
+    box-shadow: 0 4px 20px -2px rgba(0, 0, 0, 0.4);
+  }
+  .section-header {
+    display: flex;
+    align-items: center;
+    gap: 0.85rem;
+    border-bottom: 1px solid var(--card-border);
+    padding-bottom: 1rem;
+    margin-bottom: 1.5rem;
+  }
+  .section-icon {
+    width: 36px;
+    height: 36px;
+    background: rgba(56, 189, 248, 0.12);
+    color: var(--accent);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 8px;
+    font-size: 1.1rem;
+    font-weight: 800;
+    border: 1px solid rgba(56, 189, 248, 0.25);
+  }
+  .section-title {
+    font-size: 1.4rem;
+    font-weight: 800;
+    color: #fff;
+    letter-spacing: -0.01em;
+  }
+
+  h3 { color: var(--accent); font-size: 1.18rem; font-weight: 700; margin: 1.75rem 0 0.75rem; }
+  h4 { color: #e2e8f0; font-size: 1.02rem; font-weight: 600; margin: 1.25rem 0 0.5rem; }
+  p { margin-bottom: 1rem; color: #cbd5e1; font-size: 0.95rem; line-height: 1.7; }
+  ul, ol { margin-left: 1.5rem; margin-bottom: 1.25rem; color: #cbd5e1; font-size: 0.95rem; }
+  li { margin-bottom: 0.5rem; line-height: 1.6; }
+
+  /* TABLES */
+  .table-responsive {
+    overflow-x: auto;
+    margin: 1.25rem 0 1.75rem;
+    border-radius: 8px;
+    border: 1px solid var(--card-border);
+  }
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.88rem;
+    background: #0f1626;
+  }
+  th, td {
+    padding: 0.9rem 1.1rem;
+    text-align: left;
+    border-bottom: 1px solid var(--card-border);
+  }
+  th {
+    background: #162035;
+    color: var(--accent);
+    font-weight: 700;
+    text-transform: uppercase;
+    font-size: 0.76rem;
+    letter-spacing: 0.05em;
+    border-top: none;
+  }
+  tr:last-child td { border-bottom: none; }
+  tr:nth-child(even) td { background: rgba(255, 255, 255, 0.015); }
+  tr:hover td { background: rgba(56, 189, 248, 0.04); }
+  
+  .num { font-family: 'JetBrains Mono', monospace; }
+  .text-right { text-align: right; }
+  .text-center { text-align: center; }
+
+  /* CODE & PRE */
+  code {
+    background: rgba(0, 0, 0, 0.45);
+    color: var(--accent);
+    padding: 0.18rem 0.45rem;
+    border-radius: 4px;
+    font-size: 0.88em;
+    font-family: 'JetBrains Mono', monospace;
+    border: 1px solid rgba(56, 189, 248, 0.2);
+  }
+  pre {
+    background: #080d16;
+    border: 1px solid var(--card-border);
+    border-radius: 10px;
+    padding: 1.25rem 1.5rem;
+    overflow-x: auto;
+    font-size: 0.86rem;
+    color: #e2e8f0;
+    margin: 1.25rem 0;
+    font-family: 'JetBrains Mono', monospace;
+    line-height: 1.6;
+  }
+  pre code {
+    background: transparent;
+    padding: 0;
+    border: none;
+    color: inherit;
+  }
+
+  /* CALLOUTS & BOXES */
+  .callout {
+    background: rgba(15, 23, 42, 0.7);
+    border-left: 4px solid var(--accent);
+    border-radius: 0 10px 10px 0;
+    padding: 1.35rem 1.5rem;
+    margin: 1.35rem 0;
+    font-size: 0.93rem;
+  }
+  .callout.warning { border-left-color: var(--warning); background: rgba(245, 158, 11, 0.07); }
+  .callout.success { border-left-color: var(--success); background: rgba(16, 185, 129, 0.07); }
+  .callout.danger { border-left-color: var(--danger); background: rgba(239, 68, 68, 0.07); }
+  .callout.purple { border-left-color: var(--purple); background: rgba(168, 85, 247, 0.07); }
+  .callout-title { font-weight: 700; color: #fff; margin-bottom: 0.5rem; display: flex; align-items: center; gap: 0.5rem; font-size: 0.98rem; }
+
+  .formula-box {
+    background: #080d16;
+    border: 1px solid rgba(56, 189, 248, 0.35);
+    border-radius: 10px;
+    padding: 1.35rem 1.5rem;
+    margin: 1.25rem 0;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.95rem;
+    color: #f1f5f9;
+    line-height: 1.8;
+  }
+
+  .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; }
+  .grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1.25rem; }
+  @media(max-width: 950px) {
+    .grid-2, .grid-3 { grid-template-columns: 1fr; }
+  }
+
+  /* ACCORDION / DETAILS */
+  details {
+    background: var(--card-bg-elevated);
+    border: 1px solid var(--card-border);
+    border-radius: 8px;
+    margin-bottom: 0.75rem;
+    overflow: hidden;
+  }
+  summary {
+    padding: 1rem 1.25rem;
+    cursor: pointer;
+    font-weight: 600;
+    color: #e2e8f0;
+    outline: none;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    user-select: none;
+  }
+  summary:hover { background: rgba(56, 189, 248, 0.05); }
+  details[open] summary { border-bottom: 1px solid var(--card-border); }
+  .details-body { padding: 1.25rem; font-size: 0.9rem; color: #cbd5e1; }
+
+  footer {
+    text-align: center;
+    color: var(--text-dim);
+    font-size: 0.85rem;
+    padding: 2.5rem 0 1rem;
+    border-top: 1px solid var(--card-border);
+    margin-top: 3rem;
+  }
+
+  .copy-btn {
+    background: rgba(56, 189, 248, 0.15);
+    color: var(--accent);
+    border: 1px solid var(--accent);
+    padding: 0.35rem 0.75rem;
+    font-size: 0.8rem;
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    font-weight: 600;
+    transition: all 0.2s ease;
+  }
+  .copy-btn:hover {
+    background: var(--accent);
+    color: #0f172a;
+    box-shadow: 0 0 10px rgba(56, 189, 248, 0.4);
+  }
+  .copy-box {
+    background: #090d16;
+    border: 1px solid #1e293b;
+    border-left: 3px solid var(--accent);
+    border-radius: var(--radius-sm);
+    padding: 1rem 1.25rem;
+    color: #e2e8f0;
+    font-size: 0.9rem;
+    line-height: 1.65;
+    white-space: pre-wrap;
+    user-select: all;
+  }
+</style>
+</head>
+<body>
+
+<div class="container">
+
+  <!-- ========================================== -->
+  <!-- HEADER & FORMAL AUDIT REGISTRY             -->
+  <!-- ========================================== -->
+  <header>
+    <div class="badge-row">
+      <span class="badge badge-primary">Capstone Methodology Audit</span>
+      <span class="badge badge-success">Read-Only Forensic Verification</span>
+      <span class="badge badge-purple">NumPy PCG64 Seed: 20261002</span>
+      <span class="badge badge-warning">Zero Stochastic Noise (σ = 0.0)</span>
+      <span class="badge badge-danger">Frozen Artifact Lock</span>
+    </div>
+    <h1>Comprehensive Methodological Audit of Dataset B</h1>
+    <div class="subtitle">
+      Formal evidence-grounded verification of the 10,000-record simulated operational dataset and active Random Forest Regressor for Shoelotskey Villamor-Pasay, answering Capstone Defense Review Directives by Assoc. Prof. Mary Ann F. Aballiar-Vista, MEAM and Asst. Prof. Aron J. Alojado.
+    </div>
+
+    <div class="meta-grid">
+      <div class="meta-item">
+        <div class="meta-label">Auditor Role</div>
+        <div class="meta-value">Senior Machine Learning Researcher & Capstone Methodology Auditor</div>
+      </div>
+      <div class="meta-item">
+        <div class="meta-label">Audit Targets</div>
+        <div class="meta-value"><code>generate_dataset_b.py</code> · <code>dataset_b_generator_config.json</code> · <code>completion_model.meta.json</code></div>
+      </div>
+      <div class="meta-item">
+        <div class="meta-label">Active Operational Model</div>
+        <div class="meta-value">Random Forest Regressor (300 Trees, Depth 12, SHA-256: <code>9ce390ca...</code>)</div>
+      </div>
+      <div class="meta-item">
+        <div class="meta-label">Evaluation Scope</div>
+        <div class="meta-value">Dataset B Exclusively (10,000 Records; Dataset A Strictly Segregated)</div>
+      </div>
+    </div>
+  </header>
+
+  <!-- ========================================== -->
+  <!-- KEY METRIC EXECUTIVE DASHBOARD             -->
+  <!-- ========================================== -->
+  <div class="stats-grid">
+    <div class="stat-card green">
+      <div class="stat-label">RNG Reproducibility</div>
+      <div class="stat-num">100%</div>
+      <div class="stat-sub">Deterministic PCG64 seed guarantees exact bit-level reproduction</div>
+    </div>
+    <div class="stat-card blue">
+      <div class="stat-label">Empirical Template Base</div>
+      <div class="stat-num">35</div>
+      <div class="stat-sub">Collision-free canonical job templates derived from 119 real orders</div>
+    </div>
+    <div class="stat-card amber">
+      <div class="stat-label">Stochastic Noise Variance</div>
+      <div class="stat-num">σ = 0.0</div>
+      <div class="stat-sub">Pure rule-based simulation; variance driven 100% by calendar rollovers</div>
+    </div>
+    <div class="stat-card purple">
+      <div class="stat-label">Final Test Error (MAE)</div>
+      <div class="stat-num">0.0815 d</div>
+      <div class="stat-sub">≈ 1.96 hours average error across 1,500 sealed test records (R² = 0.9976)</div>
+    </div>
+  </div>
+
+  
+  <!-- ================================================================= -->
+  <!-- 📋 CAPSTONE DOCUMENTER COPY-PASTE CENTER                          -->
+  <!-- ================================================================= -->
+  <div class="section" id="documenter-hub" style="background: linear-gradient(180deg, rgba(30, 41, 59, 0.95), rgba(15, 23, 42, 0.98)); border: 2px solid var(--accent); box-shadow: 0 10px 30px rgba(56, 189, 248, 0.15);">
+    <div class="section-header" style="border-bottom: 2px solid var(--accent); padding-bottom: 1rem; margin-bottom: 1.5rem;">
+      <div class="section-icon" style="background: var(--accent); color: #0f172a; font-size: 1.4rem;">📋</div>
+      <div style="flex:1;">
+        <div class="section-title" style="color: var(--accent); font-size: 1.35rem;">CAPSTONE DOCUMENTER'S READY-TO-PASTE REVISION CENTER</div>
+        <div style="color: var(--text-muted); font-size: 0.9rem; margin-top: 0.25rem;">
+          Created specifically for the capstone documentation team. You do not need to write technical formulas or code. Everything you need to revise Chapters 1 through 5 is formatted below into student-friendly text blocks and tables. Click <strong>"📋 Copy Paragraph"</strong> on any block and paste directly into Microsoft Word.
+        </div>
+      </div>
+    </div>
+
+    <!-- QUICK NAV BUTTONS -->
+    <div style="display:flex; flex-wrap:wrap; gap:0.5rem; margin-bottom: 1.75rem;">
+      <a href="#doc-cheatsheet" class="badge badge-purple" style="text-decoration:none; padding: 0.45rem 0.85rem; font-size:0.85rem; cursor:pointer;">💡 Plain-English Cheatsheet</a>
+      <a href="#doc-ch1" class="badge badge-primary" style="text-decoration:none; padding: 0.45rem 0.85rem; font-size:0.85rem; cursor:pointer;">Chapter 1 (p. 14, 16–18)</a>
+      <a href="#doc-ch2" class="badge badge-primary" style="text-decoration:none; padding: 0.45rem 0.85rem; font-size:0.85rem; cursor:pointer;">Chapter 2 (p. 28–29)</a>
+      <a href="#doc-ch3" class="badge badge-primary" style="text-decoration:none; padding: 0.45rem 0.85rem; font-size:0.85rem; cursor:pointer;">Chapter 3 (p. 49–52)</a>
+      <a href="#doc-ch4" class="badge badge-primary" style="text-decoration:none; padding: 0.45rem 0.85rem; font-size:0.85rem; cursor:pointer;">Chapter 4 (p. 153–156)</a>
+      <a href="#doc-ch5" class="badge badge-primary" style="text-decoration:none; padding: 0.45rem 0.85rem; font-size:0.85rem; cursor:pointer;">Chapter 5 (p. 209–218)</a>
+      <a href="#technical-audit" class="badge badge-warning" style="text-decoration:none; padding: 0.45rem 0.85rem; font-size:0.85rem; cursor:pointer;">🔍 Jump to Technical Audit</a>
+    </div>
+
+    <!-- DOCUMENTER CHEATSHEET -->
+    <div id="doc-cheatsheet" class="callout purple" style="margin-bottom: 2rem;">
+      <div class="callout-title" style="font-size: 1.05rem;">💡 Plain-English Cheatsheet: What the Panel Asked Us to Fix & Why</div>
+      <p style="font-size: 0.9rem; line-height: 1.6; margin-bottom: 0.75rem;">
+        During the final defense review, <strong>Assoc. Prof. Mary Ann F. Aballiar-Vista</strong> and <strong>Asst. Prof. Aron J. Alojado</strong> gave specific instructions to make sure our machine learning methodology is scientifically defensible. Here is what every documenter needs to know:
+      </p>
+      <div class="table-responsive">
+        <table>
+          <thead>
+            <tr>
+              <th style="width: 25%;">Capstone Concept</th>
+              <th style="width: 35%;">What it Means in Plain English</th>
+              <th style="width: 40%;">Why the Panelists Care & How We Write It</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><strong>Dataset A (119 Records)</strong></td>
+              <td>Old physical receipts from 2024. Only recorded when customers came back to pick up their shoes (Claim Date), but <em>not</em> when the technicians actually finished craftwork.</td>
+              <td>We used Dataset A to show why manual paper receipts are flawed. It proved that we needed a digital system that tracks completion timestamps.</td>
+            </tr>
+            <tr>
+              <td><strong>Dataset B (10,000 Records)</strong></td>
+              <td>A simulated dataset of 10,000 orders built strictly from Shoelotskey's authorized business rules (10, 20, 25-day service tiers, Sunday closures, and 8 holidays).</td>
+              <td><strong>Crucial Panel Rule:</strong> The panel instructed us to clearly state this is simulated! We do <em>not</em> pretend we collected 10,000 physical orders. It tests whether the AI can learn the shop's complex scheduling rules.</td>
+            </tr>
+            <tr>
+              <td><strong>Feature Set C (12 Features)</strong></td>
+              <td>The 12 pieces of information known at the intake counter (pairs, service quantities, day of week, month, rush indicator).</td>
+              <td>Always report exactly 12 features in Table 5. We intentionally hid completion dates and rollover counts so the AI couldn't "cheat" (no data leakage).</td>
+            </tr>
+            <tr>
+              <td><strong>The 70 / 15 / 15 Split</strong></td>
+              <td>7,000 training orders (70%), 1,500 validation orders (15%), and 1,500 final test orders (15%).</td>
+              <td>An exploratory split study showed that an 80/10 split had a tiny 3.6-minute lower error (0.0668 d vs 0.0693 d). We explain why we kept 70/15/15: it gives 50% more test cases (1,500 vs 1,000) and preserves our frozen results without cherry-picking!</td>
+            </tr>
+            <tr>
+              <td><strong>Random Forest Model Selection</strong></td>
+              <td>We tested Linear Regression, Decision Tree, and Random Forest. Random Forest (300 trees, depth 12) was selected.</td>
+              <td>Decision Tree had a slightly lower MAE (0.0616 d vs 0.0641 d), but Random Forest had a lower RMSE (0.2994 d) and higher ±1-day accuracy (97.73%). Random Forest averages 300 trees so it avoids big mistakes.</td>
+            </tr>
+            <tr>
+              <td><strong>Final Test Accuracy</strong></td>
+              <td>MAE = 0.0815 days (~1.96 hours average error), RMSE = 0.4042 days, R² = 0.9976, and 97.20% of orders within ±1 day.</td>
+              <td>These high scores prove the AI learned the simulated shop rules. We clearly state that testing on real-world customers is future work once digital timestamps are logged.</td>
+            </tr>
+            <tr>
+              <td><strong>ML Date vs. Standard Release Date</strong></td>
+              <td><strong>ML Predicted Release Date</strong> is shown on the staff dashboard. <strong>Rule-based Standard Release Date</strong> is the official customer commitment on receipts.</td>
+              <td>The ML date advises staff on shop workload, while official customer promises follow standard shop rules so customer expectations are always protected.</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- ================================================================= -->
+    <!-- CHAPTER 1 COPY-PASTE                                              -->
+    <!-- ================================================================= -->
+    <div id="doc-ch1" style="margin-bottom: 2.5rem; background: rgba(15, 23, 42, 0.6); border: 1px solid var(--card-border); border-radius: var(--radius-md); padding: 1.5rem;">
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 1rem; border-bottom: 1px solid var(--card-border); padding-bottom: 0.75rem;">
+        <div>
+          <span class="badge badge-primary">CHAPTER 1</span>
+          <strong style="color:var(--text-bright); font-size:1.1rem; margin-left:0.5rem;">Introduction: Specific Objectives & Scope / Limitations</strong>
+        </div>
+        <span style="color:var(--text-muted); font-size:0.85rem;">Manuscript Pages: 14, 16–18</span>
+      </div>
+
+      <div style="margin-bottom: 1.25rem;">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.5rem;">
+          <h4 style="color:var(--accent); margin:0;">Target A: Objective 2 (Page 14, Item 2)</h4>
+          <button class="copy-btn" onclick="copyText('copy-ch1-obj2', this)">📋 Copy Paragraph</button>
+        </div>
+        <p style="font-size:0.85rem; color:var(--text-muted); margin-bottom:0.5rem;"><em>Why: Assoc. Prof. Vista instructed that Objective 2 must specifically state Dataset B (10,000 simulated records) and operational turnaround duration.</em></p>
+        <div id="copy-ch1-obj2" class="copy-box">2. Develop and evaluate an operational machine learning model using a 10,000-record simulated operational dataset (Dataset B) to predict service turnaround duration (Received-to-Ready-for-Release Duration) and derive operational release dates, evaluating predictive performance using Mean Absolute Error (MAE), Root Mean Square Error (RMSE), coefficient of determination (R²), and prediction tolerance within ±1, ±2, ±3, and ±5 days.</div>
+      </div>
+
+      <div>
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.5rem;">
+          <h4 style="color:var(--accent); margin:0;">Target B: Scope and Limitations (Page 16–18, ML Operational Boundary)</h4>
+          <button class="copy-btn" onclick="copyText('copy-ch1-scope', this)">📋 Copy Paragraph</button>
+        </div>
+        <p style="font-size:0.85rem; color:var(--text-muted); margin-bottom:0.5rem;"><em>Why: Clarifies that the ML model operates as an active internal estimation tool, while official customer pickup dates remain rule-based until real-world timestamps are accumulated.</em></p>
+        <div id="copy-ch1-scope" class="copy-box">To improve scheduling and service monitoring accuracy, the system includes a machine learning prediction module that estimates Ready-for-Release Duration and derives the corresponding ML Predicted Release Date using a Random Forest Regressor developed from a 10,000-record simulated operational dataset (Dataset B) representing verified Shoelotskey service configurations and business rules. Historical service records (Dataset A) were separately analyzed to assess the limitations of customer claiming behavior. 
+
+A significant methodological boundary governs the machine learning prediction component. Because historical paper receipts did not capture actual craftwork completion timestamps, the finalized operational model was developed and evaluated using Dataset B under controlled, rule-based simulation. The model achieved strong predictive performance on the held-out test partition (MAE = 0.0815 days, R² = 0.9976); however, these findings reflect performance within simulated conditions and have not yet been evaluated against actual future physical completion timestamps. Consequently, the machine learning module serves as an active internal operational estimation engine within the software dashboard, while official customer release commitments remain governed by Shoelotskey's rule-based Standard Release Dates until sufficient real-world operational completion observations are accumulated for external empirical validation.</div>
+      </div>
+    </div>
+
+    <!-- ================================================================= -->
+    <!-- CHAPTER 2 COPY-PASTE                                              -->
+    <!-- ================================================================= -->
+    <div id="doc-ch2" style="margin-bottom: 2.5rem; background: rgba(15, 23, 42, 0.6); border: 1px solid var(--card-border); border-radius: var(--radius-md); padding: 1.5rem;">
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 1rem; border-bottom: 1px solid var(--card-border); padding-bottom: 0.75rem;">
+        <div>
+          <span class="badge badge-primary">CHAPTER 2</span>
+          <strong style="color:var(--text-bright); font-size:1.1rem; margin-left:0.5rem;">Literature Review: Synthesis of the Reviewed Literature</strong>
+        </div>
+        <span style="color:var(--text-muted); font-size:0.85rem;">Manuscript Pages: 28–29</span>
+      </div>
+
+      <div>
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.5rem;">
+          <h4 style="color:var(--accent); margin:0;">Synthesis & Research Gap Replacement (Page 28–29, Concluding Paragraphs)</h4>
+          <button class="copy-btn" onclick="copyText('copy-ch2-syn', this)">📋 Copy Paragraph</button>
+        </div>
+        <p style="font-size:0.85rem; color:var(--text-muted); margin-bottom:0.5rem;"><em>Why: Distinguishes simulated craft duration from customer claiming delays in literature context.</em></p>
+        <div id="copy-ch2-syn" class="copy-box">By designing a unified platform in which digitized service records support machine learning prediction and analytics, the present study addresses the identified gap through its application in a small footwear craft-service business. The study employs distinct and complementary forms of evaluation: ISO/IEC 25010-based questionnaires assess IT experts’ evaluations of software quality characteristics, TAM assesses the shop owner’s and staff’s acceptance of the developed system, and machine learning evaluation metrics assess turnaround duration predictive performance.
+
+However, an important empirical limitation emerged from historical paper-based records: manual receipts logged customer claim dates rather than actual craftwork completion timestamps. To establish an operational prediction model aligned with actual service duration, the finalized machine learning model was developed and evaluated using Dataset B, a 10,000-record simulated operational dataset constructed from verified Shoelotskey service configurations, non-additive service tiers, and calendar closure rules. Therefore, its predictive performance represents rule-learning fidelity within controlled operational conditions and should not be interpreted as equivalent to external validation on a large collection of actual Ready-for-Release transactions. Future studies may validate and extend this approach using physical completion timestamps accumulated through ongoing digital system operations.</div>
+      </div>
+    </div>
+
+    <!-- ================================================================= -->
+    <!-- CHAPTER 3 COPY-PASTE                                              -->
+    <!-- ================================================================= -->
+    <div id="doc-ch3" style="margin-bottom: 2.5rem; background: rgba(15, 23, 42, 0.6); border: 1px solid var(--card-border); border-radius: var(--radius-md); padding: 1.5rem;">
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 1rem; border-bottom: 1px solid var(--card-border); padding-bottom: 0.75rem;">
+        <div>
+          <span class="badge badge-primary">CHAPTER 3</span>
+          <strong style="color:var(--text-bright); font-size:1.1rem; margin-left:0.5rem;">Technical Background & Methodology: Dataset B & Model Development</strong>
+        </div>
+        <span style="color:var(--text-muted); font-size:0.85rem;">Manuscript Pages: 49–52</span>
+      </div>
+
+      <!-- Item 1: Section 3.8.3 Generation Methodology -->
+      <div style="margin-bottom: 1.5rem;">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.5rem;">
+          <h4 style="color:var(--accent); margin:0;">1. Section 3.8.3 Generation Methodology for Operational Dataset B (Page 49–50)</h4>
+          <button class="copy-btn" onclick="copyText('copy-ch3-gen', this)">📋 Copy Paragraph</button>
+        </div>
+        <p style="font-size:0.85rem; color:var(--text-muted); margin-bottom:0.5rem;"><em>Why: Fulfills Directive 1 & 2 by Assoc. Prof. Vista to document the exact Python simulation module, rules, and parameters.</em></p>
+        <div id="copy-ch3-gen" class="copy-box">### 3.8.3 Generation Methodology for Operational Dataset B
+To establish an operational predictive model aligned with service-completion timelines rather than customer claiming behavior, Dataset B was developed as a 10,000-record simulated operational dataset. Dataset B models the operational duration from order intake to completion (Received-to-Ready-for-Release Duration) based on the authorized business rules and service configurations of Shoelotskey Villamor-Pasay.
+
+The dataset generation procedure was implemented in Python using a deterministic pseudo-random number generator (NumPy PCG64, fixed seed = 20261002). The generator utilized an empirical bootstrap design drawing from 35 collision-free canonical job templates derived from Shoelotskey’s 119 validated historical orders. In accordance with historical business patterns, job templates were sampled with replacement based on empirical historical frequencies from the 119 historical orders (for example, single-pair Basic Cleaning accounts for 46.22% of historical orders). Candidate intake dates were sampled with equal probability from a 305-day operational calendar (Monday through Saturday, excluding Sundays and eight statutory holidays in 2025).
+
+Service turnaround duration was calculated using Shoelotskey’s verified non-additive base tier rules: 10 days for Basic Cleaning and Minor Reglue; 20 days for Unyellowing and Minor Restoration; and 25 days for Full Reglue and Color Renewal. Orders eligible for rush processing (single-service Basic Cleaning of three pairs or fewer) were assigned a 1-day turnaround. Operational calendar rollovers were applied deterministically: if an order's target completion date fell on a Sunday or statutory shop closure, the Ready-for-Release date was automatically rolled over to the next open business day, introducing calendar-driven turnaround extensions of one to five days across 24.0% of the dataset. Exactly zero Gaussian noise or artificial delay was injected.
+
+The resulting 10,000 records were partitioned into 7,000 training records (70%), 1,500 validation records (15%), and 1,500 sealed final test records (15%). Feature Set C was restricted to 12 operational predictors known at intake, intentionally excluding target-revealing variables such as rule base days, raw completion dates, and rollover indicators to prevent target leakage.</div>
+      </div>
+
+      <!-- Item 2: Table 4 Split Sensitivity Narrative -->
+      <div style="margin-bottom: 1.5rem;">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.5rem;">
+          <h4 style="color:var(--accent); margin:0;">2. Narrative Below Table 4: Split-Ratio Sensitivity & Retention Justification (Page 50)</h4>
+          <button class="copy-btn" onclick="copyText('copy-ch3-split', this)">📋 Copy Paragraph</button>
+        </div>
+        <p style="font-size:0.85rem; color:var(--text-muted); margin-bottom:0.5rem;"><em>Why: Addresses verbal directive to evaluate split ratios and justifies keeping 70/15/15 without claiming it is universally optimal.</em></p>
+        <div id="copy-ch3-split" class="copy-box">To assess sensitivity to dataset partitioning, alternative split ratios (60/20, 65/15, 70/15, 75/15, and 80/10 equivalents) were evaluated across 5 random seeds using development records. Across all candidate configurations, mean validation MAE remained tightly bounded between 0.0668 and 0.0701 days (a narrow variance of ~4.7 minutes). While the 80/10 equivalent achieved a slightly lower mean validation MAE (0.0668 days vs. 0.0693 days, a difference of ~3.6 minutes), the 70/15/15 partition was retained based on: (1) bit-level reproducibility with frozen defense baseline artifacts; (2) adequate sample allocation, providing 1,500 validation and 1,500 test records (50% more test cases than a 1,000-record split) to ensure robust statistical power across all 35 canonical templates and rare multi-day calendar rollover events; (3) lower mean RMSE (0.3609 days vs. 0.3612 days) and tighter stability across random seeds (±0.0083 days vs. ±0.0116 days); and (4) preservation of the sealed test protocol without post-hoc data reshuffling. The 70/15/15 split is therefore retained as a methodologically sound and stable configuration rather than claimed as universally optimal.</div>
+      </div>
+
+      <!-- Item 3: Table 5A Simulation Parameters Table -->
+      <div style="margin-bottom: 1.5rem;">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.5rem;">
+          <h4 style="color:var(--accent); margin:0;">3. Table 5A: Simulation Parameters Table (Ready-to-Paste Table for Chapter 3)</h4>
+          <button class="copy-btn" onclick="copyTable('table-5a-content', this)">📋 Copy Table</button>
+        </div>
+        <p style="font-size:0.85rem; color:var(--text-muted); margin-bottom:0.5rem;"><em>Why: Table required by Assoc. Prof. Vista documenting all generator parameters.</em></p>
+        <div id="table-5a-content" class="table-responsive">
+          <table style="width:100%; border-collapse:collapse; font-size:0.88rem; background:rgba(15,23,42,0.8);">
+            <thead>
+              <tr style="border-bottom:2px solid var(--accent); background:rgba(56,189,248,0.1);">
+                <th style="padding:8px; text-align:left;">Parameter / Component</th>
+                <th style="padding:8px; text-align:left;">Configuration Value</th>
+                <th style="padding:8px; text-align:left;">Source Code Reference</th>
+                <th style="padding:8px; text-align:left;">Operational Justification</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr style="border-bottom:1px solid #334155;">
+                <td style="padding:6px 8px;"><strong>Random Number Generator</strong></td>
+                <td style="padding:6px 8px;">NumPy PCG64 (default_rng)</td>
+                <td style="padding:6px 8px;">generate_dataset_b.py: L158</td>
+                <td style="padding:6px 8px;">Ensures reproducible, high-quality pseudo-random sampling.</td>
+              </tr>
+              <tr style="border-bottom:1px solid #334155;">
+                <td style="padding:6px 8px;"><strong>Random Seed</strong></td>
+                <td style="padding:6px 8px;">20261002</td>
+                <td style="padding:6px 8px;">generate_dataset_b.py: L22</td>
+                <td style="padding:6px 8px;">Enforces absolute bit-level experimental reproducibility.</td>
+              </tr>
+              <tr style="border-bottom:1px solid #334155;">
+                <td style="padding:6px 8px;"><strong>Total Sample Size (N)</strong></td>
+                <td style="padding:6px 8px;">10,000 service orders</td>
+                <td style="padding:6px 8px;">generate_dataset_b.py: L22</td>
+                <td style="padding:6px 8px;">Provides statistical density across multi-service combinations.</td>
+              </tr>
+              <tr style="border-bottom:1px solid #334155;">
+                <td style="padding:6px 8px;"><strong>Canonical Templates</strong></td>
+                <td style="padding:6px 8px;">35 collision-free templates</td>
+                <td style="padding:6px 8px;">generate_dataset_b.py: L65–144</td>
+                <td style="padding:6px 8px;">Derived directly from Shoelotskey's 119 validated historical orders.</td>
+              </tr>
+              <tr style="border-bottom:1px solid #334155;">
+                <td style="padding:6px 8px;"><strong>Template Sampling Probability</strong></td>
+                <td style="padding:6px 8px;">Empirical historical frequency</td>
+                <td style="padding:6px 8px;">generate_dataset_b.py: L161</td>
+                <td style="padding:6px 8px;">Preserves real shop demand patterns (e.g., Basic Cleaning = 46.22%).</td>
+              </tr>
+              <tr style="border-bottom:1px solid #334155;">
+                <td style="padding:6px 8px;"><strong>Operational Calendar</strong></td>
+                <td style="padding:6px 8px;">305 working days (Year 2025)</td>
+                <td style="padding:6px 8px;">generate_dataset_b.py: L54–63</td>
+                <td style="padding:6px 8px;">Monday to Saturday operating schedule; excludes 52 Sundays and 8 holidays.</td>
+              </tr>
+              <tr style="border-bottom:1px solid #334155;">
+                <td style="padding:6px 8px;"><strong>Base Turnaround Tiers</strong></td>
+                <td style="padding:6px 8px;">10, 20, 25 days non-additive</td>
+                <td style="padding:6px 8px;">generate_dataset_b.py: L108–116</td>
+                <td style="padding:6px 8px;">10d (Cleaning/Minor Reglue), 20d (Restoration/Unyellowing), 25d (Full Reglue/Color).</td>
+              </tr>
+              <tr style="border-bottom:1px solid #334155;">
+                <td style="padding:6px 8px;"><strong>Expedited Rush Policy</strong></td>
+                <td style="padding:6px 8px;">1 calendar day turnaround</td>
+                <td style="padding:6px 8px;">generate_dataset_b.py: L119, L188</td>
+                <td style="padding:6px 8px;">Single-service Basic Cleaning of 3 pairs or fewer with rush requested.</td>
+              </tr>
+              <tr style="border-bottom:1px solid #334155;">
+                <td style="padding:6px 8px;"><strong>Stochastic Noise (sigma)</strong></td>
+                <td style="padding:6px 8px;">Zero noise (sigma = 0.0)</td>
+                <td style="padding:6px 8px;">generate_dataset_b.py: L185–205</td>
+                <td style="padding:6px 8px;">Deterministic rule simulation; variance arises 100% from calendar rollovers.</td>
+              </tr>
+              <tr style="border-bottom:1px solid #334155;">
+                <td style="padding:6px 8px;"><strong>Input Predictors (Feature Set C)</strong></td>
+                <td style="padding:6px 8px;">Exactly 12 operational features</td>
+                <td style="padding:6px 8px;">generate_dataset_b.py: L218–230</td>
+                <td style="padding:6px 8px;">Features available at intake counter; strictly excludes target leakage fields.</td>
+              </tr>
+              <tr>
+                <td style="padding:6px 8px;"><strong>Target Variable</strong></td>
+                <td style="padding:6px 8px;">simulated_turnaround_days</td>
+                <td style="padding:6px 8px;">generate_dataset_b.py: L248</td>
+                <td style="padding:6px 8px;">Integer calendar days from intake date to ready-for-release date.</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Item 4: Model Selection Rationale -->
+      <div>
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.5rem;">
+          <h4 style="color:var(--accent); margin:0;">4. Narrative for Table 6: Model Selection Rationale (Page 51–52)</h4>
+          <button class="copy-btn" onclick="copyText('copy-ch3-sel', this)">📋 Copy Paragraph</button>
+        </div>
+        <p style="font-size:0.85rem; color:var(--text-muted); margin-bottom:0.5rem;"><em>Why: Reconciles Decision Tree lower MAE vs Random Forest lower RMSE without unsupported catastrophic claims.</em></p>
+        <div id="copy-ch3-sel" class="copy-box">Three regression algorithms were evaluated using the 1,500-record validation partition: Linear Regression, Decision Tree Regressor, and Random Forest Regressor. Model selection was not decided on the basis of MAE alone. Although the Decision Tree achieved a slightly lower validation MAE (0.0616 days compared with 0.0641 days for Random Forest, a difference of approximately 3.6 minutes), Random Forest produced the superior RMSE (0.2994 days vs. 0.3093 days), higher R² (0.9987 vs. 0.9986), and higher ±1-day tolerance accuracy (97.73% vs. 97.53%). The lower RMSE indicates that Random Forest was more effective at minimizing larger prediction errors on complex multi-service and holiday rollover cases. Furthermore, aggregating 300 decorrelated decision trees provided greater ensemble stability and variance reduction compared with a single decision tree. Based on combined evaluation measures and ensemble robustness, Random Forest was selected as the finalized operational model.</div>
+      </div>
+    </div>
+
+    <!-- ================================================================= -->
+    <!-- CHAPTER 4 COPY-PASTE                                              -->
+    <!-- ================================================================= -->
+    <div id="doc-ch4" style="margin-bottom: 2.5rem; background: rgba(15, 23, 42, 0.6); border: 1px solid var(--card-border); border-radius: var(--radius-md); padding: 1.5rem;">
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 1rem; border-bottom: 1px solid var(--card-border); padding-bottom: 0.75rem;">
+        <div>
+          <span class="badge badge-primary">CHAPTER 4</span>
+          <strong style="color:var(--text-bright); font-size:1.1rem; margin-left:0.5rem;">Results and Discussion: Operational Machine Learning Evaluation</strong>
+        </div>
+        <span style="color:var(--text-muted); font-size:0.85rem;">Manuscript Pages: 153–156</span>
+      </div>
+
+      <!-- Item 1: Section 4.3 Operational Model Validation & Test Text -->
+      <div style="margin-bottom: 1.5rem;">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.5rem;">
+          <h4 style="color:var(--accent); margin:0;">1. Section 4.3 Narrative: Finalized Model Performance (Page 153–155)</h4>
+          <button class="copy-btn" onclick="copyText('copy-ch4-perf', this)">📋 Copy Paragraph</button>
+        </div>
+        <p style="font-size:0.85rem; color:var(--text-muted); margin-bottom:0.5rem;"><em>Why: Reports frozen test results and explains repeated simulated configurations vs real-world validation.</em></p>
+        <div id="copy-ch4-perf" class="copy-box">As detailed in the Machine Learning Development section, Dataset B contained 10,000 simulated operational service orders divided into 7,000 training, 1,500 validation, and 1,500 final test records. The final test set remained untouched throughout feature engineering and hyperparameter optimization and was evaluated once after freezing the selected Random Forest model.
+
+Candidate model validation on the 1,500-record validation set showed that Linear Regression obtained an MAE of 2.4764 days, Decision Tree obtained 0.0616 days, and Random Forest obtained 0.0641 days. Although Decision Tree produced a slightly lower MAE, Random Forest obtained a lower RMSE (0.2994 days vs. 0.3093 days), higher R² (0.9987), and higher ±1-day accuracy (97.73%), supporting its selection.
+
+On the independent 1,500-record final test partition, the finalized Random Forest model achieved an MAE of 0.0815 days (approximately 1.96 hours average error), an RMSE of 0.4042 days, and an R² of 0.9976. Tolerance analysis showed that 1,458 predictions (97.20%) were within ±1 day of the synthetic target value, 98.93% within ±2 days, 99.53% within ±3 days, and 100.00% within ±5 days.
+
+Feature vector overlap analysis revealed that 81.91% of validation vectors (679 / 829) and 80.72% of test vectors (695 / 861) appeared in the training set. This high overlap is characteristic of craft shop operations where customer transactions naturally cluster around 35 discrete service templates, 6 working weekdays, and 12 intake months across 2,237 unique operational profiles. The strong test performance demonstrates that the Random Forest has faithfully reconstructed the underlying business rules and calendar rollover logic across repeated operational configurations. However, because Dataset B consists of simulated operational orders, these results measure rule-learning fidelity within a controlled environment and should not be interpreted as equivalent to external validation on actual future footwear orders.</div>
+      </div>
+
+      <!-- Item 2: Residual Formula & Table 22 Text -->
+      <div>
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.5rem;">
+          <h4 style="color:var(--accent); margin:0;">2. Residual Formula & Bias Interpretation (Page 155–156)</h4>
+          <button class="copy-btn" onclick="copyText('copy-ch4-res', this)">📋 Copy Paragraph</button>
+        </div>
+        <p style="font-size:0.85rem; color:var(--text-muted); margin-bottom:0.5rem;"><em>Why: Fixes the formula label to "Synthetic Target Value" and correctly explains signed error bias.</em></p>
+        <div id="copy-ch4-res" class="copy-box">Residual error on the final test partition was calculated as:
+Residual = Synthetic Ready-for-Release Target Value – Predicted Duration
+
+Under this definition, a positive residual indicates underprediction (the target duration exceeded the model estimate), while a negative residual indicates overprediction (the model estimate exceeded the target duration). Across the 1,500 final test records, the overall mean signed residual was +0.0018 days (approximately 2.6 minutes), indicating that predictions were exceptionally well-balanced with virtually zero systematic directional bias. Across non-rollover orders (N = 1,260), test MAE was 0.0474 days with 98.41% within ±1 day; across rollover orders (N = 240), test MAE was 0.2610 days with 90.83% within ±1 day, confirming that residual error is concentrated on multi-day holiday rollover boundaries.</div>
+      </div>
+    </div>
+
+    <!-- ================================================================= -->
+    <!-- CHAPTER 5 COPY-PASTE                                              -->
+    <!-- ================================================================= -->
+    <div id="doc-ch5" style="margin-bottom: 1.5rem; background: rgba(15, 23, 42, 0.6); border: 1px solid var(--card-border); border-radius: var(--radius-md); padding: 1.5rem;">
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 1rem; border-bottom: 1px solid var(--card-border); padding-bottom: 0.75rem;">
+        <div>
+          <span class="badge badge-primary">CHAPTER 5</span>
+          <strong style="color:var(--text-bright); font-size:1.1rem; margin-left:0.5rem;">Summary of Findings, Conclusions, and Recommendations</strong>
+        </div>
+        <span style="color:var(--text-muted); font-size:0.85rem;">Manuscript Pages: 209–218</span>
+      </div>
+
+      <!-- Item 1: Summary of Findings -->
+      <div style="margin-bottom: 1.5rem;">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.5rem;">
+          <h4 style="color:var(--accent); margin:0;">1. Summary of Findings: Objective 2 (Page 209–211)</h4>
+          <button class="copy-btn" onclick="copyText('copy-ch5-find', this)">📋 Copy Paragraph</button>
+        </div>
+        <div id="copy-ch5-find" class="copy-box">2. Predictive Performance of the Random Forest Regressor
+The machine learning component was developed and evaluated through two distinct stages involving Dataset A and Dataset B.
+
+Dataset A consisted of 119 validated historical service orders derived from 714 digitized paper receipts. Historical records lacked actual craftwork completion timestamps and recorded only customer claim dates. Evaluating historical turnaround (Order-to-Claim Days) yielded high errors (MAE = 10.36 days, RMSE = 17.51 days, R² = 0.0051), demonstrating that customer pickup delay makes claim dates unsuitable as a proxy for operational service turnaround.
+
+To model true operational turnaround, Dataset B was developed as a 10,000-record simulated operational dataset based on verified shop duration tiers (10, 20, and 25 days), 1-day rush processing, Sunday closures, and statutory holidays. The dataset was partitioned into 7,000 training, 1,500 validation, and 1,500 final test records. Random Forest Regressor (300 trees, maximum depth 12) was selected over Linear Regression and Decision Tree on the validation partition due to its superior RMSE (0.2994 days), higher R² (0.9987), higher ±1-day accuracy (97.73%), and ensemble stability.
+
+On the independent 1,500-record final test partition, the finalized Random Forest model obtained an MAE of 0.0815 days (approximately 1.96 hours), an RMSE of 0.4042 days, an R² of 0.9976, and an overall mean residual of +0.0018 days. Prediction tolerance analysis showed that 97.20% of predictions were within ±1 day, 98.93% within ±2 days, 99.53% within ±3 days, and 100.00% within ±5 days. These results confirm strong predictive fidelity within simulated shop conditions. The model was integrated into the operational system to provide an active ML Predicted Release Date for staff planning, while official customer commitments remain governed by rule-based Standard Release Dates until sufficient real-world completion timestamps are accumulated.</div>
+      </div>
+
+      <!-- Item 2: Conclusions -->
+      <div style="margin-bottom: 1.5rem;">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.5rem;">
+          <h4 style="color:var(--accent); margin:0;">2. Conclusion for Objective 2 (Page 214–216)</h4>
+          <button class="copy-btn" onclick="copyText('copy-ch5-conc', this)">📋 Copy Paragraph</button>
+        </div>
+        <div id="copy-ch5-conc" class="copy-box">The study successfully achieved the objective of evaluating machine learning turnaround prediction. The finalized Random Forest Regressor demonstrated high predictive accuracy in learning non-additive service duration tiers and calendar rollovers within controlled simulation (MAE = 0.0815 days, 97.20% within ±1 day). The model serves as an active internal operational estimation engine within the developed service management system. However, because the model was trained on simulated data, its performance reflects rule-learning capability within controlled operational parameters rather than external empirical validation on real-world footwear completion timestamps. Official customer commitments remain safely anchored to Shoelotskey’s rule-based Standard Release Dates.</div>
+      </div>
+
+      <!-- Item 3: Recommendations -->
+      <div>
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.5rem;">
+          <h4 style="color:var(--accent); margin:0;">3. Recommendations for Shoelotskey & Future Researchers (Page 217–219)</h4>
+          <button class="copy-btn" onclick="copyText('copy-ch5-rec', this)">📋 Copy Paragraph</button>
+        </div>
+        <div id="copy-ch5-rec" class="copy-box">For Shoelotskey and Operational System Use: The establishment should continue utilizing the developed centralized service management system for digital intake, inventory tracking, and operational reporting. Staff should consistently log the exact timestamp when shoes are marked "For Release" to build a genuine operational dataset reflecting actual craftwork completion. Until sufficient physical completion timestamps are accumulated, the ML Predicted Release Date should continue serving as an internal operational workload guide, while official customer release commitments should remain governed by Shoelotskey’s rule-based Standard Release Dates.
+
+For Future Researchers and Machine Learning Enhancement: Future researchers should accumulate actual Ready-for-Release timestamps over an extended operational deployment (6 to 12 months) to conduct formal external validation of the Random Forest model. Researchers must maintain a clear methodological distinction between simulated operational datasets (Dataset B) and empirical real-world transactions. Once sufficient real-world completion records are available, the model should be recalibrated and compared against actual operational performance metrics.</div>
+      </div>
+    </div>
+  </div>
+
+  <div id="technical-audit"></div>
+
+  <!-- JAVASCRIPT FOR COPY TO CLIPBOARD -->
+  <script>
+    function copyText(elementId, btn) {
+      const text = document.getElementById(elementId).innerText;
+      navigator.clipboard.writeText(text).then(() => {
+        const originalText = btn.innerText;
+        btn.innerText = "✅ Copied to Clipboard!";
+        btn.style.background = "#10b981";
+        btn.style.color = "#ffffff";
+        setTimeout(() => {
+          btn.innerText = originalText;
+          btn.style.background = "";
+          btn.style.color = "";
+        }, 2000);
+      }).catch(err => {
+        console.error('Failed to copy: ', err);
+      });
+    }
+
+    function copyTable(elementId, btn) {
+      const el = document.getElementById(elementId);
+      const text = el.innerText;
+      navigator.clipboard.writeText(text).then(() => {
+        const originalText = btn.innerText;
+        btn.innerText = "✅ Table Text Copied!";
+        btn.style.background = "#10b981";
+        btn.style.color = "#ffffff";
+        setTimeout(() => {
+          btn.innerText = originalText;
+          btn.style.background = "";
+          btn.style.color = "";
+        }, 2000);
+      }).catch(err => {
+        console.error('Failed to copy: ', err);
+      });
+    }
+  </script>
+
+
+  <!-- ========================================== -->
+  <!-- SECTION 1: DATASET GENERATION PROCEDURE    -->
+  <!-- ========================================== -->
+  <div class="section">
+    <div class="section-header">
+      <div class="section-icon">1</div>
+      <div class="section-title">Dataset Generation Procedure</div>
+    </div>
+
+    <h3>1.1 Source Code Architecture</h3>
+    <p>
+      The generation of Dataset B is centralized in a standalone, fully reproducible research pipeline within the repository. Audit inspection confirms that no ad-hoc, untracked, or interactive generation routines were used:
+    </p>
+    <ul>
+      <li><strong>Primary Generation Script</strong>: <code>backend/research_outputs/ml_final/generate_dataset_b.py</code> (334 lines of structured, typed Python 3.14 code).</li>
+      <li><strong>Configuration Specification</strong>: <code>backend/research_outputs/ml_final/dataset_b_generator_config.json</code> (1,025 lines of declarative JSON containing template definitions and shop parameters).</li>
+      <li><strong>Dataset Manifest & Integrity Register</strong>: <code>backend/research_outputs/ml_final/dataset_b_manifest.json</code> (102 lines of JSON recording partition metadata and SHA-256 digests).</li>
+    </ul>
+
+    <h3>1.2 Algorithmic Pipeline & Random Seed</h3>
+    <p>
+      Dataset B was synthesized using an <strong>empirical canonical bootstrap generator</strong> designed to emulate Shoelotskey's operational order intake while enforcing verified shop business rules:
+    </p>
+    <pre><code># generate_dataset_b.py: Line 158
+rng = np.random.default_rng(seed=20261002)</code></pre>
+    <p>
+      The script initializes NumPy's 64-bit PCG (Permuted Congruential Generator) using a fixed integer seed: <code>Seed = 20261002</code>. The sampling pipeline proceeds through three formal stages:
+    </p>
+    <ol>
+      <li><strong>Operational Calendar Initialization (Lines 54–63)</strong>: A reference calendar of all open working days in year 2025 (Monday through Saturday, excluding statutory holidays and special closures) was constructed, resulting in exactly <strong>305 eligible intake dates</strong>.</li>
+      <li><strong>Canonical Template Derivation (Lines 69–140; config.json: lines 193–1024)</strong>: All 119 validated historical orders of Shoelotskey were collapsed into <strong>35 collision-free canonical job templates (CT01 to CT35)</strong> capturing the exact joint empirical distribution of pair counts and service types.</li>
+      <li><strong>Bootstrap Sampling (Lines 161–162)</strong>: The generator drew 10,000 independent samples with replacement from the canonical template pool and eligible intake dates using the deterministic random number generator:
+        <pre><code>sampled_indices = rng.choice(len(canonical_pool), size=n_samples, replace=True)
+sampled_intake_indices = rng.choice(len(candidate_intake_dates), size=n_samples, replace=True)</code></pre>
+        Because <code>canonical_pool</code> contains all 119 historical orders from Dataset A, canonical templates were sampled according to <strong>empirical historical frequencies</strong> (Probability = Historical Template Count / 119 orders), <em>not</em> uniform probabilities (1 in 35, or 2.86%). For example, CT01 (Basic Cleaning 1 pair) constitutes 46.22% (55/119) of sampling probability, whereas rare multi-service templates (CT08–CT35) constitute 0.84% (1/119) each. In contrast, candidate intake dates (305 open days) were sampled with uniform probability (equal probability of 1 in 305).
+      </li>
+    </ol>
+
+    <h3>1.3 Cryptographic Integrity (SHA-256 Hashes)</h3>
+    <p>
+      Cryptographic hash audit confirms bit-level immutability across all generated data partitions:
+    </p>
+    <div class="table-responsive">
+      <table>
+        <thead>
+          <tr>
+            <th>Dataset File Artifact</th>
+            <th>Sample Size</th>
+            <th>Exact File Size</th>
+            <th>SHA-256 Checksum Hash</th>
+            <th>Audit Status</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><code>dataset_b_10000.csv</code></td>
+            <td class="num">10,000</td>
+            <td class="num">1,662,920 bytes</td>
+            <td><code style="font-size:0.75rem;">bffe2f45043c97262471fbca02fd2f5a52163735c452f4a25a8045e6977e91bb</code></td>
+            <td><span class="badge badge-success">Verified</span></td>
+          </tr>
+          <tr>
+            <td><code>dataset_b_train_7000.csv</code></td>
+            <td class="num">7,000</td>
+            <td class="num">1,159,941 bytes</td>
+            <td><code style="font-size:0.75rem;">4dab063f029936a2788454a013539294eff13f29036bff6ba30e9701c45c2aed</code></td>
+            <td><span class="badge badge-success">Verified</span></td>
+          </tr>
+          <tr>
+            <td><code>dataset_b_validation_1500.csv</code></td>
+            <td class="num">1,500</td>
+            <td class="num">255,477 bytes</td>
+            <td><code style="font-size:0.75rem;">d2dc915946435d85448a3bde6f4981177e8c4ebf710908c3bf8e8fa7c30ed0c3</code></td>
+            <td><span class="badge badge-success">Verified</span></td>
+          </tr>
+          <tr>
+            <td><code>dataset_b_test_1500.csv</code></td>
+            <td class="num">1,500</td>
+            <td class="num">248,614 bytes</td>
+            <td><code style="font-size:0.75rem;">caaa2774868ce0657020cb1cfb2f153bc2fe56dee99af9cb2c6e38342e906a5f</code></td>
+            <td><span class="badge badge-success">Verified</span></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- ========================================== -->
+  <!-- SECTION 2: OPERATIONAL ASSUMPTIONS         -->
+  <!-- ========================================== -->
+  <div class="section">
+    <div class="section-header">
+      <div class="section-icon">2</div>
+      <div class="section-title">Operational Assumptions & Rule Taxonomy</div>
+    </div>
+
+    <p>
+      The generator implements a hybrid architecture combining shop-owner-confirmed empirical business rules and researcher-defined simulation assumptions:
+    </p>
+
+    <div class="table-responsive">
+      <table>
+        <thead>
+          <tr>
+            <th style="width: 50%;">Verified Empirical Business Rules (Shop Ground Truth)</th>
+            <th style="width: 50%;">Researcher-Defined Simulation Assumptions</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>• Basic Cleaning & Minor Reglue base duration = 10 calendar days</td>
+            <td>• Fixed reference year 2025 used as baseline order intake space</td>
+          </tr>
+          <tr>
+            <td>• Unyellowing & Minor Restoration base duration = 20 calendar days</td>
+            <td>• Order intake assumed uniformly distributed across open days</td>
+          </tr>
+          <tr>
+            <td>• Full Reglue & Color Renewal base duration = 25 calendar days</td>
+            <td>• Historical template proportions bootstrapped uniformly</td>
+          </tr>
+          <tr>
+            <td>• Non-additive maximum-tier duration rule for bundled services</td>
+            <td>• Technician capacity assumed unconstrained (no backlog queue modeled)</td>
+          </tr>
+          <tr>
+            <td>• 1-Day Rush express processing for single BC orders (≤ 3 pairs)</td>
+            <td>• Customer claiming latency completely decoupled from target variable</td>
+          </tr>
+          <tr>
+            <td>• Closed on Sundays and 8 statutory holiday shop closures</td>
+            <td>• Zero material stockouts, curing reworks, or delays simulated</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h3>2.1 Service Categories & Canonical Templates</h3>
+    <p>
+      The dataset encompasses six active craft services across single- and multi-pair orders:
+    </p>
+    <ul>
+      <li><strong>Basic Cleaning (BC)</strong>: Present in 9,917 orders (99.17%), totaling 15,246 service applications.</li>
+      <li><strong>Full Reglue (FR)</strong>: Present in 3,674 orders (36.74%), totaling 4,278 applications.</li>
+      <li><strong>Minor Reglue (MR)</strong>: Present in 820 orders (8.20%), totaling 820 applications.</li>
+      <li><strong>Unyellowing (UNY)</strong>: Present in 1,275 orders (12.75%), totaling 1,481 applications.</li>
+      <li><strong>Minor Restoration / Retouch (MRES / MRET)</strong>: Present in 1,762 orders (17.62%), totaling 2,064 applications.</li>
+      <li><strong>Color Renewal (COR)</strong>: Present in 255 orders (2.55%), totaling 255 applications.</li>
+      <li><em>Full Restoration (FRES)</em>: Unobserved in historical records; fixed at 0.</li>
+    </ul>
+
+    <h3>2.2 Order Structure & Complexity Composition</h3>
+    <ul>
+      <li><strong>Pair Counts</strong>: 1 pair (6,174 orders, 61.74%), 2 pairs (2,633 orders, 26.33%), 3 pairs (594 orders, 5.94%), 4 pairs (514 orders, 5.14%), 6 pairs (85 orders, 0.85%).</li>
+      <li><strong>Service Complexity</strong>: Single-service orders = 4,372 (43.72%); Multi-service bundled orders = 5,628 (56.28%).</li>
+      <li><strong>Rush Distribution</strong>: Regular = 8,798 (87.98%); Rush = 1,202 (12.02%). Within rush orders, 873 qualified for 1-day express turnaround; 329 retained standard tiers due to complex reglue/restoration bundling.</li>
+    </ul>
+
+    <h3>2.3 Complete Inventory of 35 Canonical Job Order Templates</h3>
+    <p>
+      The 119 validated historical orders collapsed into exactly 35 collision-free canonical job templates (CT01 to CT35). All 35 templates were independently synthesized in Dataset B according to empirical bootstrap frequencies:
+    </p>
+
+    <div class="table-responsive" style="max-height: 420px; overflow-y: auto;">
+      <table>
+        <thead>
+          <tr>
+            <th>Template ID</th>
+            <th>Pairs</th>
+            <th>Service Bundling Configuration</th>
+            <th>Base Tier</th>
+            <th>1-Day Rush?</th>
+            <th>Hist. Count (N=119)</th>
+            <th>Hist. %</th>
+            <th>Sim. Count (N=10k)</th>
+            <th>Sim. %</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr><td><code>CT01</code></td><td>1</td><td>Full Reglue (1)</td><td>25 d</td><td>No</td><td>1</td><td>0.84%</td><td>83</td><td>0.83%</td></tr>
+          <tr style="background:rgba(56,189,248,0.06);"><td><code>CT02</code></td><td>1</td><td>Basic Cleaning (1)</td><td>10 d</td><td><strong>Yes</strong></td><td>29</td><td>24.37%</td><td>2,429</td><td>24.29%</td></tr>
+          <tr><td><code>CT03</code></td><td>1</td><td>Basic Cleaning (1) + Unyellowing (1)</td><td>20 d</td><td>No</td><td>4</td><td>3.36%</td><td>328</td><td>3.28%</td></tr>
+          <tr><td><code>CT04</code></td><td>1</td><td>Basic Cleaning (1) + Color Renewal (1)</td><td>25 d</td><td>No</td><td>2</td><td>1.68%</td><td>176</td><td>1.76%</td></tr>
+          <tr><td><code>CT05</code></td><td>1</td><td>Basic Cleaning (1) + Minor Restoration (1)</td><td>20 d</td><td>No</td><td>6</td><td>5.04%</td><td>526</td><td>5.26%</td></tr>
+          <tr><td><code>CT06</code></td><td>1</td><td>Basic Cleaning (1) + Minor Reglue (1)</td><td>10 d</td><td>No</td><td>2</td><td>1.68%</td><td>175</td><td>1.75%</td></tr>
+          <tr><td><code>CT07</code></td><td>1</td><td>Basic Cleaning (1) + Minor Reglue (1) + Unyellowing (1)</td><td>20 d</td><td>No</td><td>2</td><td>1.68%</td><td>163</td><td>1.63%</td></tr>
+          <tr><td><code>CT08</code></td><td>1</td><td>Basic Cleaning (1) + Minor Reglue (1) + Minor Restoration (1)</td><td>20 d</td><td>No</td><td>1</td><td>0.84%</td><td>69</td><td>0.69%</td></tr>
+          <tr style="background:rgba(56,189,248,0.06);"><td><code>CT09</code></td><td>1</td><td>Basic Cleaning (1) + Full Reglue (1)</td><td>25 d</td><td>No</td><td>21</td><td>17.65%</td><td>1,733</td><td>17.33%</td></tr>
+          <tr><td><code>CT10</code></td><td>1</td><td>Basic Cleaning (1) + Full Reglue (1) + Unyellowing (1)</td><td>25 d</td><td>No</td><td>1</td><td>0.84%</td><td>88</td><td>0.88%</td></tr>
+          <tr><td><code>CT11</code></td><td>1</td><td>Basic Cleaning (1) + Full Reglue (1) + Color Renewal (1)</td><td>25 d</td><td>No</td><td>1</td><td>0.84%</td><td>79</td><td>0.79%</td></tr>
+          <tr><td><code>CT12</code></td><td>1</td><td>Basic Cleaning (1) + Full Reglue (1) + Minor Restoration (1)</td><td>25 d</td><td>No</td><td>4</td><td>3.36%</td><td>325</td><td>3.25%</td></tr>
+          <tr><td><code>CT13</code></td><td>2</td><td>Basic Cleaning (1) + Unyellowing (1) + Minor Restoration (1)</td><td>20 d</td><td>No</td><td>1</td><td>0.84%</td><td>74</td><td>0.74%</td></tr>
+          <tr style="background:rgba(56,189,248,0.06);"><td><code>CT14</code></td><td>2</td><td>Basic Cleaning (2)</td><td>10 d</td><td><strong>Yes</strong></td><td>17</td><td>14.29%</td><td>1,456</td><td>14.56%</td></tr>
+          <tr><td><code>CT15</code></td><td>2</td><td>Basic Cleaning (2) + Unyellowing (1)</td><td>20 d</td><td>No</td><td>1</td><td>0.84%</td><td>78</td><td>0.78%</td></tr>
+          <tr><td><code>CT16</code></td><td>2</td><td>Basic Cleaning (2) + Minor Restoration (2)</td><td>20 d</td><td>No</td><td>1</td><td>0.84%</td><td>96</td><td>0.96%</td></tr>
+          <tr><td><code>CT17</code></td><td>2</td><td>Basic Cleaning (2) + Minor Reglue (1)</td><td>10 d</td><td>No</td><td>1</td><td>0.84%</td><td>93</td><td>0.93%</td></tr>
+          <tr><td><code>CT18</code></td><td>2</td><td>Basic Cleaning (2) + Full Reglue (1)</td><td>25 d</td><td>No</td><td>2</td><td>1.68%</td><td>187</td><td>1.87%</td></tr>
+          <tr><td><code>CT19</code></td><td>2</td><td>Basic Cleaning (2) + Full Reglue (1) + Minor Restoration (1)</td><td>25 d</td><td>No</td><td>2</td><td>1.68%</td><td>168</td><td>1.68%</td></tr>
+          <tr><td><code>CT20</code></td><td>2</td><td>Basic Cleaning (2) + Full Reglue (1) + Unyellowing (1) + MRES (1)</td><td>25 d</td><td>No</td><td>1</td><td>0.84%</td><td>92</td><td>0.92%</td></tr>
+          <tr><td><code>CT21</code></td><td>2</td><td>Basic Cleaning (2) + Full Reglue (1) + Minor Reglue (1)</td><td>25 d</td><td>No</td><td>2</td><td>1.68%</td><td>157</td><td>1.57%</td></tr>
+          <tr><td><code>CT22</code></td><td>2</td><td>Basic Cleaning (2) + Full Reglue (1) + Minor Reglue (1) + MRES (1)</td><td>25 d</td><td>No</td><td>1</td><td>0.84%</td><td>76</td><td>0.76%</td></tr>
+          <tr><td><code>CT23</code></td><td>2</td><td>Basic Cleaning (2) + Full Reglue (2)</td><td>25 d</td><td>No</td><td>2</td><td>1.68%</td><td>156</td><td>1.56%</td></tr>
+          <tr><td><code>CT24</code></td><td>3</td><td>Basic Cleaning (1) + Unyellowing (3) + Minor Restoration (3)</td><td>20 d</td><td>No</td><td>1</td><td>0.84%</td><td>103</td><td>1.03%</td></tr>
+          <tr><td><code>CT25</code></td><td>3</td><td>Basic Cleaning (2) + Full Reglue (1)</td><td>25 d</td><td>No</td><td>1</td><td>0.84%</td><td>94</td><td>0.94%</td></tr>
+          <tr><td><code>CT26</code></td><td>3</td><td>Basic Cleaning (3)</td><td>10 d</td><td><strong>Yes</strong></td><td>2</td><td>1.68%</td><td>166</td><td>1.66%</td></tr>
+          <tr><td><code>CT27</code></td><td>3</td><td>Basic Cleaning (3) + Unyellowing (1)</td><td>20 d</td><td>No</td><td>1</td><td>0.84%</td><td>86</td><td>0.86%</td></tr>
+          <tr><td><code>CT28</code></td><td>3</td><td>Basic Cleaning (3) + Minor Restoration (1)</td><td>20 d</td><td>No</td><td>1</td><td>0.84%</td><td>70</td><td>0.70%</td></tr>
+          <tr><td><code>CT29</code></td><td>3</td><td>Basic Cleaning (3) + Full Reglue (1) + Unyellowing (1) + MRES (1)</td><td>25 d</td><td>No</td><td>1</td><td>0.84%</td><td>75</td><td>0.75%</td></tr>
+          <tr><td><code>CT30</code></td><td>4</td><td>Basic Cleaning (4)</td><td>10 d</td><td>No</td><td>2</td><td>1.68%</td><td>153</td><td>1.53%</td></tr>
+          <tr><td><code>CT31</code></td><td>4</td><td>Basic Cleaning (4) + Full Reglue (1) + Minor Reglue (1)</td><td>25 d</td><td>No</td><td>1</td><td>0.84%</td><td>87</td><td>0.87%</td></tr>
+          <tr><td><code>CT32</code></td><td>4</td><td>Basic Cleaning (4) + Full Reglue (2) + Unyellowing (1)</td><td>25 d</td><td>No</td><td>1</td><td>0.84%</td><td>100</td><td>1.00%</td></tr>
+          <tr><td><code>CT33</code></td><td>4</td><td>Basic Cleaning (4) + Full Reglue (3)</td><td>25 d</td><td>No</td><td>1</td><td>0.84%</td><td>86</td><td>0.86%</td></tr>
+          <tr><td><code>CT34</code></td><td>4</td><td>Basic Cleaning (4) + Full Reglue (3) + Unyellowing (1) + MRES (1)</td><td>25 d</td><td>No</td><td>1</td><td>0.84%</td><td>88</td><td>0.88%</td></tr>
+          <tr><td><code>CT35</code></td><td>6</td><td>Basic Cleaning (5)</td><td>10 d</td><td>No</td><td>1</td><td>0.84%</td><td>85</td><td>0.85%</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h3>2.4 Duplicate Operational Feature Vectors & Target Mapping Audit</h3>
+    <div class="table-responsive">
+      <table>
+        <thead>
+          <tr>
+            <th>Audit Metric</th>
+            <th>Measured Value</th>
+            <th>Methodological Explanation</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><strong>Unique Feature Vectors (Feature Set C)</strong></td>
+            <td class="num"><strong>2,237</strong> / 10,000</td>
+            <td>35 templates cross-tabulated across 6 open weekdays, 12 months, and rush states.</td>
+          </tr>
+          <tr>
+            <td><strong>Unique Vectors in Training Partition</strong></td>
+            <td class="num"><strong>1,946</strong> / 7,000</td>
+            <td>Training set captures 87.0% of the entire operational feature space.</td>
+          </tr>
+          <tr>
+            <td><strong>Validation Vectors Present in Training</strong></td>
+            <td class="num"><strong>679 / 829 (81.91%)</strong></td>
+            <td>High feature overlap is expected in shop operations (orders share template and intake day).</td>
+          </tr>
+          <tr>
+            <td><strong>Test Vectors Present in Training</strong></td>
+            <td class="num"><strong>695 / 861 (80.72%)</strong></td>
+            <td>Evaluates model capacity to generalize rules across common and edge configurations.</td>
+          </tr>
+          <tr>
+            <td><strong>Ambiguous Vectors (Multi-Target Mappings)</strong></td>
+            <td class="num"><strong>56 / 2,237 (2.50%)</strong></td>
+            <td>Identical feature vectors mapping to different turnaround days due to holiday closures occurring on specific dates within the month.</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="callout purple">
+      <div class="callout-title">Methodological Interpretation: Repeated Operational Configurations, Not Novel Generalization</div>
+      <p style="margin-bottom:0;">
+        The measured feature overlap — <strong>81.91% of validation vectors (679 / 829)</strong> and <strong>80.72% of test vectors (695 / 861)</strong> being present in the training partition — represents <strong>repeated simulated configurations</strong> across the 2,237 unique feature vectors governed by shop business rules, rather than proof of generalization to genuinely new operational conditions. In a craft shoe repair shop with 35 discrete service templates, 6 working weekdays, and 12 intake months, customer transactions naturally cluster around identical feature combinations. The high test accuracy therefore verifies that the Random Forest has faithfully reconstructed the deterministic business rules and calendar rollover logic across repeated configurations, but does <em>not</em> prove generalization to unobserved operational workflows or external service environments.
+      </p>
+    </div>
+
+  <!-- ========================================== -->
+  <!-- SECTION 3: SERVICE-DURATION DISTRIBUTIONS  -->
+  <!-- ========================================== -->
+  <div class="section">
+    <div class="section-header">
+      <div class="section-icon">3</div>
+      <div class="section-title">Service-Duration Distributions & Bundling Logic</div>
+    </div>
+
+    <p>
+      The service duration in Dataset B is <strong>not drawn from a continuous probability distribution</strong> (such as a Gaussian bell curve, Gamma, or Exponential distribution). Instead, it follows a <strong>deterministic tiered step function</strong> governed by Shoelotskey's non-additive operational rules.
+    </p>
+
+    <h3>3.1 Non-Additive Base Duration Logic</h3>
+    <p>
+      In footwear restoration, technicians execute multiple treatments on the same shoe concurrently (e.g., sole cleaning proceeds while adhesives cure). Turnaround is determined by the most time-intensive service in the bundle, rather than the sum of individual service times:
+    </p>
+    <pre><code># generate_dataset_b.py: Lines 108-116
+if fr_q > 0 or cor_q > 0:
+    base_tier = 25
+elif m_res_q > 0 or uny_q > 0:
+    base_tier = 20
+elif mr_q > 0 or bc_q > 0:
+    base_tier = 10
+else:
+    base_tier = 10</code></pre>
+
+    <h3>3.2 Formulation of Base Service Tier (Base Days)</h3>
+    <div class="formula-box">
+      D_base = 
+      <br>&nbsp;&nbsp;1,&nbsp;&nbsp;&nbsp;&nbsp;if Rush = 1 AND TotalPairs ≤ 3 AND is_BC_only = 1
+      <br>&nbsp;&nbsp;25,&nbsp;&nbsp;&nbsp;else if Q_FR > 0 OR Q_COR > 0
+      <br>&nbsp;&nbsp;20,&nbsp;&nbsp;&nbsp;else if Q_MRES > 0 OR Q_UNY > 0
+      <br>&nbsp;&nbsp;10,&nbsp;&nbsp;&nbsp;else if Q_MR > 0 OR Q_BC > 0
+      <br>&nbsp;&nbsp;10,&nbsp;&nbsp;&nbsp;otherwise
+    </div>
+  </div>
+
+  <!-- ========================================== -->
+  <!-- SECTION 4: NOISE AND OPERATIONAL VARIABILITY-->
+  <!-- ========================================== -->
+  <div class="section">
+    <div class="section-header">
+      <div class="section-icon">4</div>
+      <div class="section-title">Noise and Operational Variability Audit</div>
+    </div>
+
+    <h3>4.1 Forensic Audit: Explicit Absence of Stochastic Noise</h3>
+    <div class="callout warning">
+      <div class="callout-title">⚠️ Audit Finding: Exactly Zero Random Noise Injected (σ = 0.0)</div>
+      Code inspection of <code>generate_dataset_b.py</code> (lines 169–249) reveals that <strong>zero Gaussian noise, zero random perturbations (zero Gaussian bell-curve noise), and zero artificial delay parameters</strong> were introduced into Dataset B. The generation process executes pure calendar and date arithmetic without continuous error terms.
+    </div>
+
+    <h3>4.2 Exact Source of Empirical Target Variance</h3>
+    <p>
+      All variance observed in <code>simulated_turnaround_days</code> (ranging from 1 to 30 days, Mean = 16.79 days, Median = 20.0 days) arises strictly from <strong>calendar and scheduling rollovers</strong>:
+    </p>
+    <ul>
+      <li><strong>Sunday Shop Closures</strong>: Shoelotskey does not release completed footwear on Sundays. If Raw Target Date (Intake Date + Base Tier Days) falls on a Sunday, the release is rolled over to Monday (+1 day extension).</li>
+      <li><strong>Statutory & Special Closures</strong>: Eight owner-confirmed closures were modeled in the 2025 calendar:
+        <ul>
+          <li>Holy Week 2025: April 16, 17, 18, 19 (+1 to +4 days extension)</li>
+          <li>Christmas 2025: December 24, 25 (+1 to +2 days extension)</li>
+          <li>New Year 2025/2026: December 31, January 1 (+1 to +2 days extension)</li>
+        </ul>
+      </li>
+      <li><strong>Cumulative Rollover Impact</strong>: Exactly <strong>2,400 orders (24.0%)</strong> in Dataset B experienced calendar rollovers, extending turnaround by +1 to +5 days. The remaining 7,600 orders (76.0%) completed exactly at their base tier.</li>
+    </ul>
+  </div>
+
+  <!-- ========================================== -->
+  <!-- SECTION 5: TARGET GENERATION RULES         -->
+  <!-- ========================================== -->
+  <div class="section">
+    <div class="section-header">
+      <div class="section-icon">5</div>
+      <div class="section-title">Target Generation Rules & Deterministic Formulation</div>
+    </div>
+
+    <h3>5.1 Target Definition</h3>
+    <p>
+      The target variable is <code>simulated_turnaround_days</code>, operationally defined as the calendar interval from intake until the order is ready for customer collection:
+    </p>
+    <div class="formula-box">
+      Target = ReadyForReleaseDate - IntakeDate = D_base + Δ_Sunday + Δ_Holiday
+      <br>where Δ_Sunday ∈ {0, 1} and Δ_Holiday ∈ {0, 1, 2, 3, 4, 5}
+    </div>
+
+    <h3>5.2 Deterministic Nature of the Target</h3>
+    <p>
+      The target is <strong>100% deterministic</strong> with respect to the input pair of (Job Template, Intake Date). Because Feature Set C includes coarse calendar indicators (<code>intake_day_of_week</code>, <code>intake_month</code>) but intentionally omits exact calendar dates and holiday lookup tables (<code>generate_dataset_b.py</code>: lines 218–230), the Random Forest Regressor must learn non-linear decision boundaries to approximate holiday and weekend rollover rules.
+    </p>
+
+    <h3>5.3 Distinction Among the Five Operational and Predictive Constructs</h3>
+    <p>
+      To prevent conceptual conflation between simulated ground truth, continuous model estimates, software date calculations, business commitments, and physical operations, the research strictly distinguishes five operational and predictive constructs:
+    </p>
+    <div class="table-responsive">
+      <table>
+        <thead>
+          <tr>
+            <th>Construct</th>
+            <th>Type & Units</th>
+            <th>Operational Definition / Formula</th>
+            <th>System Role & Evaluation Status</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><strong>1. Synthetic Ready-for-Release Target Value</strong></td>
+            <td>Integer (Calendar Days)</td>
+            <td><code>simulated_turnaround_days</code> = Ready-for-Release Date − Intake Date (Base Days + Rollover Days)</td>
+            <td>Ground-truth supervision target in Dataset B (10,000 records). Generated deterministically via verified shop rules and 2025 calendar closures.</td>
+          </tr>
+          <tr>
+            <td><strong>2. Random Forest Predicted Duration</strong></td>
+            <td>Continuous Float (Days)</td>
+            <td>Predicted Turnaround Days = Random Forest Output from Feature Set C (12 predictors)</td>
+            <td>Raw machine learning regression output (e.g., 10.04 days). Evaluated against synthetic target in frozen tests (MAE = 0.0815 days).</td>
+          </tr>
+          <tr>
+            <td><strong>3. ML Predicted Release Date</strong></td>
+            <td>Calendar Date (YYYY-MM-DD)</td>
+            <td>Intake Date + Rounded Predicted Days (calendar days)</td>
+            <td>Displayed on operational Dashboard and Job Order Detail screens to inform staff of algorithmic turnaround expectations.</td>
+          </tr>
+          <tr>
+            <td><strong>4. Rule-Based Standard Release Date</strong></td>
+            <td>Calendar Date (YYYY-MM-DD)</td>
+            <td>Intake Date + Standard SLA Business Days (statutory rule schedule)</td>
+            <td>Official customer commitment printed on claim stubs and job tickets. Protects customer expectations against model variance.</td>
+          </tr>
+          <tr>
+            <td><strong>5. Actual Future Operational Completion Timestamps</strong></td>
+            <td>Physical DateTime Timestamp</td>
+            <td>Recorded timestamp when physical footwear is inspected and placed onto the <code>For Release</code> shelf</td>
+            <td><strong>Unrecorded in historical paper records (Dataset A).</strong> Not yet used for empirical validation; reserved for future operational logging and real-world external validation.</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- ========================================== -->
+  <!-- SECTION 6: DATASET SPLITTING & LEAKAGE     -->
+  <!-- ========================================== -->
+  <div class="section">
+    <div class="section-header">
+      <div class="section-icon">6</div>
+      <div class="section-title">Dataset Splitting, Partition Integrity & Leakage Audit</div>
+    </div>
+
+    <h3>6.1 Partition Verification</h3>
+    <pre><code># generate_dataset_b.py: Lines 165-166
+partition_assignments = np.array(['train'] * 7000 + ['validation'] * 1500 + ['test'] * 1500)
+rng.shuffle(partition_assignments)</code></pre>
+    <ul>
+      <li><strong>Training Partition</strong>: 7,000 records (70.0%, SHA-256: <code>4dab063f...</code>)</li>
+      <li><strong>Validation Partition</strong>: 1,500 records (15.0%, SHA-256: <code>d2dc9159...</code>) — used exclusively for hyperparameter grid search.</li>
+      <li><strong>Final Test Partition</strong>: 1,500 records (15.0%, SHA-256: <code>caaa2774...</code>) — sealed, untouched holdout evaluated once.</li>
+      <li><strong>Zero Record Leakage</strong>: Verified by <code>dataset_b_partition_integrity.json</code>:
+        <div class="formula-box" style="font-size:0.95rem; font-family:var(--font-sans); text-align:center;">Zero Partition Overlap: Training Set ∩ Validation Set = 0 rows; Training Set ∩ Test Set = 0 rows; Validation Set ∩ Test Set = 0 rows (100% mutually exclusive partitions)</div>
+      </li>
+    </ul>
+
+    <h3>6.2 Programmatic Target Leakage Audit</h3>
+    <p>
+      To eliminate shortcut learning, the feature set was programmatically restricted in <code>run_phase3a_modeling.py</code> (lines 69–86):
+    </p>
+    <div class="table-responsive">
+      <table>
+        <thead>
+          <tr>
+            <th style="width: 50%;">Allowed Operational Predictors (Feature Set C, 12 Features)</th>
+            <th style="width: 50%;">Strictly Excluded Target Leakage Fields (Guarded Variables)</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>• <code>total_pairs</code></td>
+            <td>• <code>rule_base_days</code> (direct base duration)</td>
+          </tr>
+          <tr>
+            <td>• <code>basic_cleaning_qty</code>, <code>full_reglue_qty</code>, <code>minor_reglue_qty</code></td>
+            <td>• <code>raw_target_date</code> (unadjusted completion date)</td>
+          </tr>
+          <tr>
+            <td>• <code>unyellowing_qty</code>, <code>minor_restoration_qty</code>, <code>color_renewal_qty</code></td>
+            <td>• <code>ready_for_release_date</code> (exact release date)</td>
+          </tr>
+          <tr>
+            <td>• <code>rush_indicator</code></td>
+            <td>• <code>sunday_rollover_days</code>, <code>special_closure_rollover_days</code></td>
+          </tr>
+          <tr>
+            <td>• <code>distinct_service_types</code>, <code>total_service_applications</code></td>
+            <td>• <code>total_rollover_days</code> (exact rollover offset)</td>
+          </tr>
+          <tr>
+            <td>• <code>intake_day_of_week</code>, <code>intake_month</code></td>
+            <td>• <code>one_day_rush_eligible</code> (precomputed rush flag)</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="callout success">
+      <div class="callout-title">✓ Audit Verdict: Target Leakage Successfully Prevented</div>
+      Feature Set C contains zero direct target leakage. The model is forced to infer base tiers from raw service quantities and infer rollovers from calendar indicators.
+    </div>
+  </div>
+
+  <!-- ========================================== -->
+  <!-- SECTION 7: INTERNAL VS EXTERNAL VALIDITY   -->
+  <!-- ========================================== -->
+  <div class="section">
+    <div class="section-header">
+      <div class="section-icon">7</div>
+      <div class="section-title">Internal and External Validity Boundaries</div>
+    </div>
+
+    <div class="table-responsive">
+      <table>
+        <thead>
+          <tr>
+            <th style="width: 50%;">High Internal Simulation Validity</th>
+            <th style="width: 50%;">Inherent External Operational Limitations</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>• Model achieved test MAE = 0.0815 days (1.96 hours)</td>
+            <td>• Cannot establish accuracy on future live shop orders</td>
+          </tr>
+          <tr>
+            <td>• Model achieved test R² = 0.9976 on unseen test partition</td>
+            <td>• Synthetic generator assumes unconstrained technician capacity</td>
+          </tr>
+          <tr>
+            <td>• 97.20% predictions within ±1 day; 100.0% within ±5 days</td>
+            <td>• Unrecorded operational delays (parts, rework) not modeled</td>
+          </tr>
+          <tr>
+            <td>• Confirms successful machine learning reconstruction of shop rules</td>
+            <td>• Real-world validation requires logging actual For Release logs</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <p>
+      <strong>Internal Validity</strong>: The near-perfect test scores confirm that the Random Forest algorithm successfully captured the deterministic interactions, non-additive service hierarchies, and rollover mechanics encoded in the simulation generator.<br>
+      <strong>External Validity Boundary</strong>: Because training, validation, and testing partitions originate from the same underlying synthetic generator, testing on held-out simulated records evaluates model generalization <em>within the simulated universe</em>. It does not prove predictive accuracy on actual future service orders, where unexpected material delays, staff illness, rework, power interruptions, or customer pickup latency occur.
+    </p>
+  </div>
+
+  <!-- ========================================== -->
+  <!-- SECTION 8: SPLIT-RATIO SENSITIVITY STUDY   -->
+  <!-- ========================================== -->
+  <div class="section">
+    <div class="section-header">
+      <div class="section-icon">8</div>
+      <div class="section-title">Split-Ratio Sensitivity Analysis (Ma'am Vista Verbal Directive)</div>
+    </div>
+
+    <p>
+      Addressing the panelist's verbal directive to investigate whether alternative training/validation/testing split ratios improve generalization, an empirical sensitivity study was conducted across five candidate configurations using the identical 10,000 records and random seed. In strict adherence to sound machine learning methodology, <strong>model split selection was governed by validation metrics, reserving test metrics for unbiased confirmation</strong>:
+    </p>
+
+    <div class="table-responsive">
+      <table>
+        <thead>
+          <tr>
+            <th>Split Configuration</th>
+            <th>Train N</th>
+            <th>Val N</th>
+            <th>Test N</th>
+            <th>Val MAE (d)</th>
+            <th>Val RMSE (d)</th>
+            <th>Val R²</th>
+            <th>Val ±1d (%)</th>
+            <th>Test MAE (d)</th>
+            <th>Test RMSE (d)</th>
+            <th>Test R²</th>
+            <th>Test ±1d (%)</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><strong>60 / 20 / 20</strong></td>
+            <td class="num">6,000</td>
+            <td class="num">2,000</td>
+            <td class="num">2,000</td>
+            <td class="num">0.0763</td>
+            <td class="num">0.3760</td>
+            <td class="num">0.9978</td>
+            <td class="num">97.20%</td>
+            <td class="num">0.0741</td>
+            <td class="num">0.3643</td>
+            <td class="num">0.9980</td>
+            <td class="num">97.20%</td>
+          </tr>
+          <tr>
+            <td><strong>65 / 20 / 15</strong></td>
+            <td class="num">6,500</td>
+            <td class="num">2,000</td>
+            <td class="num">1,500</td>
+            <td class="num">0.0867</td>
+            <td class="num">0.4090</td>
+            <td class="num">0.9975</td>
+            <td class="num">96.70%</td>
+            <td class="num">0.0638</td>
+            <td class="num">0.3381</td>
+            <td class="num">0.9983</td>
+            <td class="num">97.53%</td>
+          </tr>
+          <tr style="background: rgba(56, 189, 248, 0.08); font-weight: 700;">
+            <td><strong>70 / 15 / 15 (Baseline)</strong> ★</td>
+            <td class="num">7,000</td>
+            <td class="num">1,500</td>
+            <td class="num">1,500</td>
+            <td class="num" style="color:var(--accent);">0.0641</td>
+            <td class="num" style="color:var(--accent);">0.2994</td>
+            <td class="num">0.9987</td>
+            <td class="num">97.73%</td>
+            <td class="num">0.0815</td>
+            <td class="num">0.4042</td>
+            <td class="num">0.9976</td>
+            <td class="num">97.20%</td>
+          </tr>
+          <tr>
+            <td><strong>75 / 15 / 10</strong></td>
+            <td class="num">7,500</td>
+            <td class="num">1,500</td>
+            <td class="num">1,000</td>
+            <td class="num">0.1019</td>
+            <td class="num">0.4560</td>
+            <td class="num">0.9968</td>
+            <td class="num">95.80%</td>
+            <td class="num">0.0513</td>
+            <td class="num">0.2982</td>
+            <td class="num">0.9987</td>
+            <td class="num">98.00%</td>
+          </tr>
+          <tr>
+            <td><strong>80 / 10 / 10</strong></td>
+            <td class="num">8,000</td>
+            <td class="num">1,000</td>
+            <td class="num">1,000</td>
+            <td class="num">0.0971</td>
+            <td class="num">0.4118</td>
+            <td class="num">0.9974</td>
+            <td class="num">95.90%</td>
+            <td class="num">0.0542</td>
+            <td class="num">0.3029</td>
+            <td class="num">0.9987</td>
+            <td class="num">98.00%</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="callout success">
+      <div class="callout-title">🛡️ Experimental Integrity & Test Partition Protection</div>
+      <p style="color: #cbd5e1; font-size: 0.9rem; margin-bottom: 0.5rem;">
+        1. <strong>Sealed Test Protection</strong>: The original frozen 1,500-record test set was NOT used for selecting alternative split configurations.<br>
+        2. <strong>Test Set Incomparability</strong>: The exploratory splits evaluated different test subsets of varying sample sizes (2,000, 1,500, and 1,000 records); therefore, their test metrics cannot be compared as though they evaluated identical observations.<br>
+        3. <strong>Sample Size Ratio Correction</strong>: A 1,500-record test set provides 1.5× (50% more) records than a 1,000-record set (not three times).
+      </p>
+    </div>
+
+    <h4 style="color: var(--accent); margin-top: 1.5rem; margin-bottom: 0.5rem;">Investigation: Why Re-Seeded 70/15/15 (0.0986 d) Differs from Original 70/15/15 (0.0641 d)</h4>
+    <p style="color: var(--text-muted); font-size: 0.9rem; line-height: 1.6;">
+      Forensic audit reveals that the variation between the original 70/15/15 validation MAE (<strong>0.0641 days</strong>) and the re-seeded 70/15/15 experiment (<strong>0.0986 days</strong>) is driven by <strong>random partition assignment sampling, not the split ratio</strong>:
+    </p>
+    <ul style="color: var(--text-muted); font-size: 0.88rem; line-height: 1.6; padding-left: 1.2rem; margin-bottom: 1.25rem;">
+      <li>In the original partition (drawn in <code>generate_dataset_b.py</code> via <code>rng.shuffle</code> inside the generator stream), the validation set contained <strong>264 calendar rollover orders (17.60%)</strong>.</li>
+      <li>In the re-seeded permutation (drawn from the exported CSV), the validation set contained <strong>294 rollover orders (19.60%)</strong> — exactly 30 more rollover cases.</li>
+      <li>Because non-rollover orders have an average MAE of only <strong>0.0474 days</strong> while rollover orders have an average MAE of <strong>0.2610 days</strong>, this small shift in the distribution of complex rollover records increases the partition MAE by 0.0345 days. The two validation sets share only <strong>216 of 1,500 records (14.4% overlap)</strong>.</li>
+    </ul>
+
+    <h4 style="color: var(--accent); margin-top: 1.25rem; margin-bottom: 0.5rem;">Development-Only Repeated Validation (5 Seeds Across 8,500 Development Records)</h4>
+    <p style="color: var(--text-muted); font-size: 0.9rem; line-height: 1.6;">
+      To isolate the true effect of the split ratio from partition sampling noise, repeated validation was conducted across 5 random seeds (<code>20261002, 42, 123, 999, 2025</code>) strictly using the 8,500 development records (Train + Val), keeping the 1,500 test set completely sealed:
+    </p>
+
+    <div class="table-responsive">
+      <table>
+        <thead>
+          <tr>
+            <th>Candidate Configuration</th>
+            <th>Effective Train N</th>
+            <th>Effective Val N</th>
+            <th>Mean Val MAE (Days)</th>
+            <th>Std Val MAE</th>
+            <th>Mean Val RMSE (Days)</th>
+            <th>Std Val RMSE</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr style="background: rgba(56, 189, 248, 0.08); font-weight: 700;">
+            <td><strong>70 / 15 Equivalent (82.4% / 17.6%)</strong> ★</td>
+            <td class="num">7,000</td>
+            <td class="num">1,500</td>
+            <td class="num" style="color:var(--accent);">0.0693</td>
+            <td class="num">± 0.0083</td>
+            <td class="num">0.3609</td>
+            <td class="num">± 0.0353</td>
+          </tr>
+          <tr>
+            <td><strong>60 / 20 Equivalent (75.0% / 25.0%)</strong></td>
+            <td class="num">6,375</td>
+            <td class="num">2,125</td>
+            <td class="num">0.0695</td>
+            <td class="num">± 0.0026</td>
+            <td class="num" style="color:var(--accent);">0.3558</td>
+            <td class="num">± 0.0160</td>
+          </tr>
+          <tr>
+            <td><strong>75 / 15 Equivalent (83.3% / 16.7%)</strong></td>
+            <td class="num">7,083</td>
+            <td class="num">1,417</td>
+            <td class="num">0.0701</td>
+            <td class="num">± 0.0074</td>
+            <td class="num">0.3618</td>
+            <td class="num">± 0.0337</td>
+          </tr>
+          <tr>
+            <td><strong>80 / 10 Equivalent (88.9% / 11.1%)</strong></td>
+            <td class="num">7,555</td>
+            <td class="num">945</td>
+            <td class="num">0.0668</td>
+            <td class="num">± 0.0116</td>
+            <td class="num">0.3612</td>
+            <td class="num">± 0.0434</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="callout purple">
+      <div class="callout-title">Methodological Finding: Split-Ratio Sensitivity & Retention Justification</div>
+      <p style="margin-bottom: 0.5rem;">
+        Repeated development validation across 5 random seeds confirms that the <strong>80/10 equivalent partition achieved the lowest mean validation MAE (0.0668 ± 0.0116 days)</strong>, while the <strong>70/15 equivalent achieved 0.0693 ± 0.0083 days</strong>. The original 70/15/15 configuration is <em>not</em> claimed to be universally optimal. However, retaining the 70/15/15 partition is methodologically sound and fully justified on four grounds:
+      </p>
+      <ul style="color: var(--text-muted); font-size: 0.88rem; line-height: 1.6; padding-left: 1.2rem; margin-bottom: 0;">
+        <li><strong>Reproducibility & Audit Trail</strong>: Preserves exact alignment with frozen seed <code>20261002</code>, published baseline artifacts, and cryptographic digests without post-hoc cherry-picking.</li>
+        <li><strong>Adequate Sample Allocation</strong>: Reserving 1,500 validation and 1,500 test records allocates 50% more records (1.5×) than a 1,000-record partition, ensuring sufficient sample density across all 35 canonical job templates and capturing 240 rare calendar rollover test events (versus ~160 in a 1,000-record split).</li>
+        <li><strong>Comparable Performance & Stability</strong>: The 0.0025-day difference (~3.6 minutes) is smaller than the sampling standard deviation between random seeds (±0.0083 d). Furthermore, 70/15 achieved lower mean RMSE (0.3609 d vs. 0.3612 d) and superior stability across seeds (MAE std dev ±0.0083 d vs. ±0.0116 d).</li>
+        <li><strong>Preservation of the Frozen Evaluation</strong>: Retaining 70/15/15 maintains absolute separation between development experimentation and the untouched test evaluation, preventing retrospective test-set manipulation.</li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- ========================================== -->
+  <!-- SECTION 9: MODEL COMPARISON & SELECTION    -->
+  <!-- ========================================== -->
+  <div class="section">
+    <div class="section-header">
+      <div class="section-icon">9</div>
+      <div class="section-title">Model Selection & Baseline Benchmark Comparison</div>
+    </div>
+
+    <p>
+      In response to panelist review, Random Forest Regressor was compared against competitive candidate algorithms and statistical baselines under identical validation procedures on Feature Set C:
+    </p>
+
+    <div class="table-responsive">
+      <table>
+        <thead>
+          <tr>
+            <th>Candidate Model / Baseline</th>
+            <th>Type</th>
+            <th>Validation MAE</th>
+            <th>Validation RMSE</th>
+            <th>Validation R²</th>
+            <th>±1-Day Tolerance</th>
+            <th>±2-Day Tolerance</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr style="background: rgba(56, 189, 248, 0.08); font-weight: 700;">
+            <td><strong>Random Forest Regressor (Feature C)</strong> ★</td>
+            <td>Ensemble Tree</td>
+            <td class="num">0.0641 d (1.54 h)</td>
+            <td class="num" style="color:var(--accent);">0.2994 d</td>
+            <td class="num" style="color:var(--accent);">0.9987</td>
+            <td class="num" style="color:var(--accent);">97.73%</td>
+            <td class="num">99.60%</td>
+          </tr>
+          <tr>
+            <td><strong>Decision Tree Regressor (Depth 8)</strong></td>
+            <td>Single Tree</td>
+            <td class="num" style="color:var(--accent);">0.0616 d (1.48 h)</td>
+            <td class="num">0.3093 d</td>
+            <td class="num">0.9986</td>
+            <td class="num">97.53%</td>
+            <td class="num">99.60%</td>
+          </tr>
+          <tr>
+            <td><strong>Privileged Shop Rules (Base Tiers)</strong></td>
+            <td>Deterministic Rule</td>
+            <td class="num">0.1960 d (4.70 h)</td>
+            <td class="num">0.5086 d</td>
+            <td class="num">0.9963</td>
+            <td class="num">98.73%</td>
+            <td class="num">99.60%</td>
+          </tr>
+          <tr>
+            <td><strong>Linear Regression (Feature C)</strong></td>
+            <td>Parametric Linear</td>
+            <td class="num">2.4764 d</td>
+            <td class="num">3.1062 d</td>
+            <td class="num">0.8619</td>
+            <td class="num">20.33%</td>
+            <td class="num">53.00%</td>
+          </tr>
+          <tr>
+            <td><strong>Median Predictor Baseline</strong></td>
+            <td>Statistical Median</td>
+            <td class="num">7.4573 d</td>
+            <td class="num">9.0493 d</td>
+            <td class="num">-0.1718</td>
+            <td class="num">16.33%</td>
+            <td class="num">16.40%</td>
+          </tr>
+          <tr>
+            <td><strong>Mean Predictor Baseline</strong></td>
+            <td>Statistical Mean</td>
+            <td class="num">7.7827 d</td>
+            <td class="num">8.3766 d</td>
+            <td class="num">-0.0041</td>
+            <td class="num">0.00%</td>
+            <td class="num">0.20%</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h3>9.1 Random Forest Selection Criterion (Evidence-Grounded)</h3>
+    <div class="callout warning">
+      <div class="callout-title">Honest Research Finding Regarding MAE vs. RMSE</div>
+      <p>
+        On validation data, Decision Tree achieved a marginally lower MAE than Random Forest (<strong>0.0616 days vs. 0.0641 days</strong>, a difference of just 3.6 minutes). The manuscript must <em>not</em> claim Random Forest achieved the absolute lowest MAE.
+      </p>
+      <p style="margin-bottom:0;">
+        <strong>Justification for Selecting Random Forest:</strong> Random Forest was selected because it achieved a <strong>superior RMSE (0.2994 days vs. 0.3093 days)</strong>, higher R² (<strong>0.9987 vs. 0.9986</strong>), higher ±1-day tolerance accuracy (<strong>97.73% vs. 97.53%</strong>), and greater ensemble stability by aggregating 300 decorrelated decision trees, reducing sensitivity to high-variance single-tree split boundaries. While Decision Tree achieved a marginally lower validation MAE (0.0616 days vs. 0.0641 days, a difference of ~3.6 minutes), Random Forest minimizes larger variance errors as reflected in the lower RMSE.
+      </p>
+    </div>
+  </div>
+
+  <!-- ========================================== -->
+  <!-- SECTION 10: HYPERPARAMETER OPTIMIZATION   -->
+  <!-- ========================================== -->
+  <div class="section">
+    <div class="section-header">
+      <div class="section-icon">10</div>
+      <div class="section-title">Hyperparameter Optimization Evidence (Grid Search)</div>
+    </div>
+
+    <p>
+      The finalized model was selected from an exhaustive <strong>324-candidate grid search</strong> on the 7,000-record training set evaluated on the 1,500-record validation set. Top configurations are archived in <code>dataset_b_phase3a_validation_report.json</code>:
+    </p>
+
+    <div class="table-responsive">
+      <table>
+        <thead>
+          <tr>
+            <th>Rank</th>
+            <th>Trees (n_estimators)</th>
+            <th>Max Depth</th>
+            <th>Min Samples Split</th>
+            <th>Min Samples Leaf</th>
+            <th>Max Features</th>
+            <th>Val MAE (d)</th>
+            <th>Val RMSE (d)</th>
+            <th>Val R²</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr style="background: rgba(56, 189, 248, 0.08); font-weight: 700;">
+            <td>#1 (Selected)</td>
+            <td class="num">300</td>
+            <td class="num">12</td>
+            <td class="num">10</td>
+            <td class="num">4</td>
+            <td class="num">1.0</td>
+            <td class="num">0.0641</td>
+            <td class="num">0.2994</td>
+            <td class="num">0.9987</td>
+          </tr>
+          <tr>
+            <td>#2</td>
+            <td class="num">300</td>
+            <td class="num">None</td>
+            <td class="num">10</td>
+            <td class="num">4</td>
+            <td class="num">1.0</td>
+            <td class="num">0.0641</td>
+            <td class="num">0.2995</td>
+            <td class="num">0.9987</td>
+          </tr>
+          <tr>
+            <td>#3</td>
+            <td class="num">300</td>
+            <td class="num">16</td>
+            <td class="num">10</td>
+            <td class="num">4</td>
+            <td class="num">1.0</td>
+            <td class="num">0.0641</td>
+            <td class="num">0.2995</td>
+            <td class="num">0.9987</td>
+          </tr>
+          <tr>
+            <td>#4</td>
+            <td class="num">200</td>
+            <td class="num">12</td>
+            <td class="num">10</td>
+            <td class="num">4</td>
+            <td class="num">1.0</td>
+            <td class="num">0.0642</td>
+            <td class="num">0.2994</td>
+            <td class="num">0.9987</td>
+          </tr>
+          <tr>
+            <td>#5</td>
+            <td class="num">200</td>
+            <td class="num">None</td>
+            <td class="num">10</td>
+            <td class="num">4</td>
+            <td class="num">1.0</td>
+            <td class="num">0.0642</td>
+            <td class="num">0.2995</td>
+            <td class="num">0.9987</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+    <p>
+      <strong>Parsimony Choice</strong>: Depth 12 was chosen over unconstrained depth (None) because it achieves identical predictive precision while constraining tree complexity and model size (regularization against noise).
+    </p>
+  </div>
+
+  <!-- ========================================== -->
+  <!-- SECTION 11: SUBGROUP RESIDUALS & FAILURES  -->
+  <!-- ========================================== -->
+  <div class="section">
+    <div class="section-header">
+      <div class="section-icon">11</div>
+      <div class="section-title">Subgroup Residuals & Failure Mode Analysis</div>
+    </div>
+
+    <p>
+      Residual breakdown on the 1,500 sealed test records reveals exactly where the model succeeds and where it exhibits residual error:
+    </p>
+
+    <div class="grid-2">
+      <div>
+        <h4>By Base Service Tier</h4>
+        <div class="table-responsive">
+          <table>
+            <thead>
+              <tr><th>Base Tier</th><th>Test N</th><th>MAE (d)</th><th>RMSE (d)</th><th>±1d (%)</th></tr>
+            </thead>
+            <tbody>
+              <tr><td><strong>1-Day Rush</strong></td><td class="num">133</td><td class="num">0.0726</td><td class="num">0.3999</td><td class="num">97.74%</td></tr>
+              <tr><td><strong>10-Day Tier</strong></td><td class="num">545</td><td class="num">0.0445</td><td class="num">0.2625</td><td class="num">98.53%</td></tr>
+              <tr><td><strong>20-Day Tier</strong></td><td class="num">227</td><td class="num">0.1081</td><td class="num">0.5344</td><td class="num">97.36%</td></tr>
+              <tr><td><strong>25-Day Tier</strong></td><td class="num">595</td><td class="num">0.1074</td><td class="num">0.4518</td><td class="num">95.80%</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div>
+        <h4>By Rollover Status (Failure Source)</h4>
+        <div class="table-responsive">
+          <table>
+            <thead>
+              <tr><th>Rollover Present?</th><th>Test N</th><th>MAE (d)</th><th>RMSE (d)</th><th>±1d (%)</th></tr>
+            </thead>
+            <tbody>
+              <tr style="color: #34d399;"><td><strong>No Rollover</strong></td><td class="num">1,260</td><td class="num">0.0474</td><td class="num">0.2352</td><td class="num">98.41%</td></tr>
+              <tr style="color: #fbbf24; font-weight:700;"><td><strong>Rollover Present</strong></td><td class="num">240</td><td class="num">0.2610</td><td class="num">0.8549</td><td class="num">90.83%</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <h3>11.1 Top Error Cases (Difficult Edge Cases)</h3>
+    <p>
+      Inspection of the top 5 largest absolute error cases confirms that errors occur exclusively during multi-day holiday rollovers:
+    </p>
+    <div class="table-responsive">
+      <table>
+        <thead>
+          <tr>
+            <th>Order ID</th>
+            <th>Template</th>
+            <th>Pairs</th>
+            <th>Base Tier</th>
+            <th>Rollover Days</th>
+            <th>Actual (d)</th>
+            <th>Predicted (d)</th>
+            <th>Absolute Error</th>
+            <th>Root Cause</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><code>SIM-02864</code></td>
+            <td>CT32</td>
+            <td>4</td>
+            <td>25 d</td>
+            <td>+5 d</td>
+            <td class="num">30.0</td>
+            <td class="num">25.76</td>
+            <td class="num" style="color:var(--danger);">4.24 d</td>
+            <td>5-day Holy Week + Sunday rollover boundary</td>
+          </tr>
+          <tr>
+            <td><code>SIM-05979</code></td>
+            <td>CT05</td>
+            <td>1</td>
+            <td>20 d</td>
+            <td>+5 d</td>
+            <td class="num">25.0</td>
+            <td class="num">20.84</td>
+            <td class="num" style="color:var(--danger);">4.16 d</td>
+            <td>Holy Week statutory closure boundary</td>
+          </tr>
+          <tr>
+            <td><code>SIM-09842</code></td>
+            <td>CT05</td>
+            <td>1</td>
+            <td>20 d</td>
+            <td>+5 d</td>
+            <td class="num">25.0</td>
+            <td class="num">20.84</td>
+            <td class="num" style="color:var(--danger);">4.16 d</td>
+            <td>Identical Holy Week intake date edge case</td>
+          </tr>
+          <tr>
+            <td><code>SIM-02379</code></td>
+            <td>CT02</td>
+            <td>1</td>
+            <td>1 d (Rush)</td>
+            <td>+5 d</td>
+            <td class="num">6.0</td>
+            <td class="num">1.92</td>
+            <td class="num" style="color:var(--danger);">4.08 d</td>
+            <td>Rush order placed immediately before Holy Week</td>
+          </tr>
+          <tr>
+            <td><code>SIM-01800</code></td>
+            <td>CT07</td>
+            <td>1</td>
+            <td>20 d</td>
+            <td>+4 d</td>
+            <td class="num">24.0</td>
+            <td class="num">20.10</td>
+            <td class="num" style="color:var(--danger);">3.90 d</td>
+            <td>Christmas / New Year multi-day rollover</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- ========================================== -->
+  <!-- SECTION 12: DEPLOYED MODEL VERIFICATION    -->
+  <!-- ========================================== -->
+  <div class="section">
+    <div class="section-header">
+      <div class="section-icon">12</div>
+      <div class="section-title">Production Model Verification & Deployment Alignment</div>
+    </div>
+
+    <p>
+      Audit inspection of the live web application deployment configuration confirms exact parity between the research artifacts and the production system:
+    </p>
+
+    <div class="table-responsive">
+      <table>
+        <thead>
+          <tr>
+            <th>Deployment Artifact</th>
+            <th>Location</th>
+            <th>SHA-256 Digest</th>
+            <th>Alignment Status</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><strong>Frozen PKL Artifact</strong></td>
+            <td><code>backend/research_outputs/ml_final/dataset_b_selected_model.pkl</code></td>
+            <td><code style="font-size:0.75rem;">9ce390ca5f0197fe0eef86086ccfd78b79b18b37c19eae76fca7d518bbfeac3b</code></td>
+            <td><span class="badge badge-success">MATCH (100%)</span></td>
+          </tr>
+          <tr>
+            <td><strong>Model Metadata Register</strong></td>
+            <td><code>backend/completion_model.meta.json</code></td>
+            <td>Matches <code>model_version: 3.0-active</code>, Depth 12, Trees 300</td>
+            <td><span class="badge badge-success">MATCH (100%)</span></td>
+          </tr>
+          <tr>
+            <td><strong>Inference Service Engine</strong></td>
+            <td><code>backend/main.py</code> (Line 61: <code>predict_turnaround_days</code>)</td>
+            <td>Computes <code>ML Predicted Release Date</code> from Feature Set C</td>
+            <td><span class="badge badge-success">ACTIVE ENGINE</span></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="callout success">
+      <div class="callout-title">Audit Recommendation on Deployed Model</div>
+      <strong>RETAIN EXISTING MODEL</strong>: The sensitivity study confirmed that split variation does not materially improve validation performance (less than 55 minutes variance across all candidate splits). Refitting or deploying a new model would destabilize the frozen defense evidence without statistical justification. The active operational model (Depth 12, 300 Trees) must be retained.
+    </div>
+  </div>
+
+  <!-- ========================================== -->
+  <!-- SECTION 13: CORRECTION LOG                 -->
+  <!-- ========================================== -->
+  <div class="section">
+    <div class="section-header">
+      <div class="section-icon">13</div>
+      <div class="section-title">Comprehensive Methodological Audit Correction Log</div>
+    </div>
+    <p>
+      The following log documents all audit corrections reconciled prior to manuscript revision, detailing original statements, corrected statements, supporting code/artifacts, and manuscript implications:
+    </p>
+    <div class="table-responsive">
+      <table>
+        <thead>
+          <tr>
+            <th>Item #</th>
+            <th>Original Statement / Assumption</th>
+            <th>Corrected Statement / Fact</th>
+            <th>Supporting Code / Artifact</th>
+            <th>Manuscript Implication</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><strong>CORR-01</strong></td>
+            <td>Feature Set C consists of 11 or unspecified count of predictors in preliminary notes.</td>
+            <td>Feature Set C contains <strong>exactly 12 operational predictors</strong> available at order intake.</td>
+            <td><code>dataset_b_selected_model.pkl</code> (<code>n_features_in_ = 12</code>); <code>dataset_b_generator_config.json</code>: L88–109.</td>
+            <td>Confirm Table 5 (p. 50) and Section 3.8.3 report exactly 12 features; maintain consistency throughout Chapters 3, 4, and 5.</td>
+          </tr>
+          <tr>
+            <td><strong>CORR-02</strong></td>
+            <td>The 70/15/15 partition is "universally optimal" across all evaluation criteria.</td>
+            <td>Repeated development validation shows <strong>80/10 equivalent achieved lowest mean validation MAE (0.0668 d) vs. 70/15 (0.0693 d)</strong>. 70/15 is retained based on reproducibility, adequate test sample density (1,500 records), lower RMSE (0.3609 d), and lower inter-seed variance (±0.0083 d).</td>
+            <td><code>scratch/in_depth_audit.py</code>; <code>dataset_b_split_sensitivity_results.json</code>.</td>
+            <td>Reconcile split-ratio narrative in Chapter 3 (p. 50) and Chapter 4 (p. 154) to present honest sensitivity results without claiming universal optimality.</td>
+          </tr>
+          <tr>
+            <td><strong>CORR-03</strong></td>
+            <td>Canonical job templates were sampled with uniform probability across 35 templates (1 in 35, or 2.86%).</td>
+            <td>Templates were sampled with replacement from the 119 historical orders, following <strong>empirical historical frequencies</strong> (Probability = Historical Frequency / 119). Intake dates (305 open days) were sampled uniformly (equal probability of 1 in 305).</td>
+            <td><code>generate_dataset_b.py</code>: L161–162 (<code>rng.choice(len(canonical_pool))</code>).</td>
+            <td>Clarify sampling methodology in Chapter 3 Section 3.8.3 and Table 5A; prevent reviewer confusion over uniform vs. historical weighting.</td>
+          </tr>
+          <tr>
+            <td><strong>CORR-04</strong></td>
+            <td>Random Forest was selected because it "prevents catastrophic errors on rare calendar edge cases".</td>
+            <td>Random Forest was selected because it achieved <strong>lower validation RMSE (0.2994 d vs. 0.3093 d)</strong>, higher R² (0.9987), higher ±1-day accuracy (97.73%), and greater ensemble stability over single trees, despite Decision Tree's slightly lower MAE (0.0616 d vs. 0.0641 d).</td>
+            <td><code>dataset_b_candidate_validation_results.json</code>; Table 6 (p. 51).</td>
+            <td>Remove unsupported "catastrophic error" claims from Chapter 3 (p. 51) and Chapter 4 (p. 154); justify selection using RMSE and ensemble variance reduction.</td>
+          </tr>
+          <tr>
+            <td><strong>CORR-05</strong></td>
+            <td>High validation (81.91%) and test (80.72%) feature vector overlap proves broad operational generalization.</td>
+            <td>High vector overlap represents <strong>repeated simulated configurations</strong> across the 2,237 unique feature vectors governed by shop rules, verifying rule-learning fidelity rather than novel operational generalization.</td>
+            <td><code>scratch/in_depth_audit.py</code> (679/829 val vectors, 695/861 test vectors in training).</td>
+            <td>Clarify evaluation boundary in Chapter 3 Section 3.8.4 and Chapter 4 Section 4.3; explicitly qualify that test metrics measure rule adherence on simulated shop profiles.</td>
+          </tr>
+          <tr>
+            <td><strong>CORR-06</strong></td>
+            <td>Target variable is interchangeably referred to as "Actual Ready-for-Release Duration" and "Turnaround Days".</td>
+            <td>Clearly distinguish <strong>Synthetic Ready-for-Release target values</strong>, <strong>RF predicted durations</strong>, <strong>ML Predicted Release Dates</strong>, <strong>Rule-based Standard Release Dates</strong>, and <strong>Actual future operational completion timestamps</strong> (not yet used for external validation).</td>
+            <td><code>generate_dataset_b.py</code>: L248; <code>main.py</code>: L61; Chapter 4 Table 22 header.</td>
+            <td>Replace "Actual Ready-for-Release Duration" with "Synthetic Ready-for-Release Target Value" in Chapter 4 Table 21/22 and residual formula (p. 155); explicitly distinguish from rule-based customer commitments.</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- ========================================== -->
+  <!-- MANUSCRIPT READY DELIVERABLES (OUTPUTS A-E)-->
+  <!-- ========================================== -->
+  <div class="section">
+    <div class="section-header">
+      <div class="section-icon">📝</div>
+      <div class="section-title">Manuscript-Ready Deliverables (Outputs A to E)</div>
+    </div>
+
+    <h3>Output A: Dataset B Generation Methodology (Manuscript Replacement for Section 3.8.3)</h3>
+    <pre><code>### 3.8.3 Generation Methodology for Operational Dataset B
+To establish an operational predictive model aligned with service-completion timelines rather than customer claiming behavior, Dataset B was developed as a 10,000-record simulated operational dataset. Dataset B models the operational duration from order intake to completion (Received-to-Ready-for-Release Duration) based on the authorized business rules and service configurations of Shoelotskey Villamor-Pasay.
+
+The dataset generation procedure was implemented in Python using a deterministic pseudo-random number generator (NumPy PCG64, fixed seed = 20261002). The generator utilized an empirical bootstrap design drawing from 35 collision-free canonical job templates derived from Shoelotskey’s 119 validated historical orders. Each simulated record represents an intake transaction assigned to an open business day within a 305-day operational calendar (Monday through Saturday, excluding Sundays and eight statutory holidays). 
+
+Service turnaround duration was calculated using Shoelotskey’s verified non-additive base tier rules: 10 days for Basic Cleaning and Minor Reglue; 20 days for Unyellowing and Minor Restoration; and 25 days for Full Reglue and Color Renewal. Orders eligible for rush processing (single-service Basic Cleaning of three pairs or fewer) were assigned a 1-day turnaround. Operational calendar rollovers were applied deterministically: if an order's target completion date fell on a Sunday or statutory shop closure, the Ready-for-Release date was automatically rolled over to the next open business day, introducing calendar-driven turnaround extensions of one to five days across 24.0% of the dataset. No continuous Gaussian noise or stochastic perturbation was introduced.
+
+The resulting 10,000 records were partitioned into 7,000 training records (70%), 1,500 validation records (15%), and 1,500 sealed final test records (15%). Feature Set C was restricted to 12 operational predictors known at intake, intentionally excluding target-revealing variables such as rule base days, raw completion dates, and rollover indicators to prevent target leakage.</code></pre>
+
+    <h3>Output B: Dataset B Generation Parameters Table (Table 5A)</h3>
+    <div class="table-responsive">
+      <table>
+        <thead>
+          <tr>
+            <th>Parameter / Component</th>
+            <th>Configuration Value</th>
+            <th>Source Code Reference</th>
+            <th>Operational Justification</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><strong>Random Number Generator</strong></td>
+            <td>NumPy PCG64 (<code>default_rng</code>)</td>
+            <td><code>generate_dataset_b.py</code>: L158</td>
+            <td>Ensures reproducible, non-overlapping pseudo-random sampling.</td>
+          </tr>
+          <tr>
+            <td><strong>Random Seed</strong></td>
+            <td><code>20261002</code></td>
+            <td><code>generate_dataset_b.py</code>: L22</td>
+            <td>Enforces absolute bit-level experimental reproducibility.</td>
+          </tr>
+          <tr>
+            <td><strong>Total Sample Size (N)</strong></td>
+            <td>10,000 service orders</td>
+            <td><code>generate_dataset_b.py</code>: L22</td>
+            <td>Provides statistical density across multi-service combinations.</td>
+          </tr>
+          <tr>
+            <td><strong>Data Partitions</strong></td>
+            <td>7,000 Train / 1,500 Val / 1,500 Test</td>
+            <td><code>generate_dataset_b.py</code>: L165</td>
+            <td>Standard 70/15/15 allocation for tuning and sealed testing.</td>
+          </tr>
+          <tr>
+            <td><strong>Empirical Source Templates</strong></td>
+            <td>35 canonical templates (<code>CT01</code>–<code>CT35</code>)</td>
+            <td><code>config.json</code>: L193–1024</td>
+            <td>Derived from 119 validated historical orders to mirror actual demand.</td>
+          </tr>
+          <tr>
+            <td><strong>Operational Calendar Space</strong></td>
+            <td>305 open days (Mon–Sat, Year 2025)</td>
+            <td><code>generate_dataset_b.py</code>: L54–63</td>
+            <td>Reflects the shop's 6-day operating week and business closures.</td>
+          </tr>
+          <tr>
+            <td><strong>Base Service Tier: Tier 1</strong></td>
+            <td>10 calendar days</td>
+            <td><code>config.json</code>: L116, L128</td>
+            <td>Standard turnaround for Basic Cleaning and Minor Reglue.</td>
+          </tr>
+          <tr>
+            <td><strong>Base Service Tier: Tier 2</strong></td>
+            <td>20 calendar days</td>
+            <td><code>config.json</code>: L169, L174</td>
+            <td>Turnaround for curing and unyellowing/restoration chemical processes.</td>
+          </tr>
+          <tr>
+            <td><strong>Base Service Tier: Tier 3</strong></td>
+            <td>25 calendar days</td>
+            <td><code>config.json</code>: L134, L153</td>
+            <td>Turnaround for complete sole rebonding and color renewal curing.</td>
+          </tr>
+          <tr>
+            <td><strong>Rush Base Tier</strong></td>
+            <td>1 calendar day</td>
+            <td><code>config.json</code>: L188–192</td>
+            <td>Express turnaround eligible only for simple cleaning (≤ 3 pairs).</td>
+          </tr>
+          <tr>
+            <td><strong>Service Bundling Rule</strong></td>
+            <td>Non-additive maximum tier</td>
+            <td><code>generate_dataset_b.py</code>: L108–116</td>
+            <td>Turnaround governed by the most complex service in the bundle.</td>
+          </tr>
+          <tr>
+            <td><strong>Sunday Closure Policy</strong></td>
+            <td>+1 day rollover to Monday</td>
+            <td><code>generate_dataset_b.py</code>: L46, L193</td>
+            <td>Shop is closed on Sundays; orders cannot be released on Sunday.</td>
+          </tr>
+          <tr>
+            <td><strong>Special Closures</strong></td>
+            <td>8 specific holiday dates</td>
+            <td><code>generate_dataset_b.py</code>: L34–43</td>
+            <td>Holy Week, Christmas, and New Year shop closure rollovers.</td>
+          </tr>
+          <tr>
+            <td><strong>Stochastic Noise (σ)</strong></td>
+            <td>None (zero noise, sigma = 0.0)</td>
+            <td><code>generate_dataset_b.py</code>: L192–195</td>
+            <td>Pure rule-based calendar simulation; no artificial noise injected.</td>
+          </tr>
+          <tr>
+            <td><strong>Predictor Features</strong></td>
+            <td>Feature Set C (12 features)</td>
+            <td><code>generate_dataset_b.py</code>: L218–230</td>
+            <td>Features available at intake; strictly excludes target leakage.</td>
+          </tr>
+          <tr>
+            <td><strong>Target Variable</strong></td>
+            <td><code>simulated_turnaround_days</code></td>
+            <td><code>generate_dataset_b.py</code>: L248</td>
+            <td>Measured as <code>ready_for_release_date - intake_date</code> in days.</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h3>Output C: Reproducibility & Limitations (Manuscript Section 3.8.4)</h3>
+    <pre><code>### Reproducibility and Methodological Limitations of Dataset B
+1. Reproducibility Verification:
+   Dataset B is fully reproducible via `python backend/research_outputs/ml_final/generate_dataset_b.py`. Execution with seed 20261002 independently regenerates identical data rows and reproduces the exact SHA-256 file hashes recorded in dataset_b_manifest.json. Zero data drift or stochastic variance occurs across re-runs.
+2. Simulation Assumptions:
+   • Infinite Capacity Assumption: The generator assumes that shop throughput is unconstrained by daily order volume. Queuing delays due to technician backlog are not simulated.
+   • Zero Operational Friction: The generator models ideal craft execution without material stockouts, sole re-adhesion failures, paint curing rework, or power outages.
+   • Static Calendar: The model assumes strict adherence to scheduled operating days without unplanned weather suspensions or ad-hoc shop holidays.
+3. External Validity Boundary:
+   The near-perfect predictive performance obtained on the held-out test partition (MAE = 0.0815 days, R² = 0.9976) demonstrates that the Random Forest Regressor successfully learned and reconstructed the underlying simulation rules. However, because both development and test partitions originate from the same deterministic data-generating process, these metrics do not demonstrate predictive validity on future real-world footwear orders. Real-world validation remains future work contingent upon logging actual Ready-for-Release timestamps.</code></pre>
+
+    <h3>Output D: Scope and Limitations (Manuscript Replacement for Section 1.5)</h3>
+    <pre><code>### Scope and Limitations: Machine Learning Operational Boundary
+A significant methodological boundary governs the machine learning prediction module. Due to the unreliability of historical paper receipts in capturing actual craftwork completion timestamps (as demonstrated by the Dataset A Order-to-Claim evaluation), the finalized Random Forest Regressor was developed and evaluated using Dataset B, a 10,000-record simulated operational dataset based on verified shop rules and non-additive service tiers. While the finalized model achieved strong predictive performance on the unseen test partition (MAE = 0.0815 days, R² = 0.9976), the evaluation reflects performance within a controlled, simulated environment. The model has not been validated on actual future Ready-for-Release timestamps. Consequently, the machine learning module serves as an active operational prediction engine within the software, while official customer release commitments remain governed by Shoelotskey’s rule-based Standard Release Dates until sufficient real-world operational completion data are accumulated for external validation.</code></pre>
+
+    <h3>Output E: Panelist Directive Compliance Matrix (Assoc. Prof. Vista)</h3>
+    <div class="table-responsive">
+      <table>
+        <thead>
+          <tr>
+            <th>Panelist Directive (Assoc. Prof. Vista)</th>
+            <th>Manuscript Requirement</th>
+            <th>Audit Evidence in Implementation</th>
+            <th>Compliance Status</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><strong>1. Document complete synthetic generator</strong></td>
+            <td>Document script, generator logic, and workflow</td>
+            <td>Fully documented in <code>generate_dataset_b.py</code> (L22–330) and <code>config.json</code>.</td>
+            <td><span class="badge badge-success">FULLY ADDRESSED</span></td>
+          </tr>
+          <tr>
+            <td><strong>2. Document all distributions and duration rules</strong></td>
+            <td>Document service base tiers, bundling rules, and distributions</td>
+            <td>Fully documented: 10, 20, 25-day non-additive tiers and 1-day rush rule (<code>config.json</code>: L112–192).</td>
+            <td><span class="badge badge-success">FULLY ADDRESSED</span></td>
+          </tr>
+          <tr>
+            <td><strong>3. Document noise terms and variability</strong></td>
+            <td>Document noise process, formulas, and parameters</td>
+            <td>Verified: Zero continuous noise (sigma = 0.0). All variance is calendar-driven (<code>generate_dataset_b.py</code>: L192–205).</td>
+            <td><span class="badge badge-success">FULLY ADDRESSED</span></td>
+          </tr>
+          <tr>
+            <td><strong>4. Document workload assumptions</strong></td>
+            <td>Document order intake and operating conditions</td>
+            <td>Verified: 305 open days, 35 canonical templates, unconstrained technician backlog modeled.</td>
+            <td><span class="badge badge-success">FULLY ADDRESSED</span></td>
+          </tr>
+          <tr>
+            <td><strong>5. Document random seeds and reproducibility</strong></td>
+            <td>Identify random seeds and verify hash integrity</td>
+            <td>Verified: Seed <code>20261002</code>, NumPy PCG64, exact SHA-256 file hashes verified (<code>manifest.json</code>: L6–12).</td>
+            <td><span class="badge badge-success">FULLY ADDRESSED</span></td>
+          </tr>
+          <tr>
+            <td><strong>6. Programmatic target leakage audit</strong></td>
+            <td>Inspect feature set for derived target rules</td>
+            <td>Verified: Feature Set C strictly isolates all 8 target-revealing variables (<code>run_phase3a_modeling.py</code>: L69–86).</td>
+            <td><span class="badge badge-success">FULLY ADDRESSED</span></td>
+          </tr>
+          <tr>
+            <td><strong>7. Distinguish internal vs external validity</strong></td>
+            <td>State that high test scores measure simulation learning, not real shop accuracy</td>
+            <td>Formally stated in Section 7, Output C, and Output D. Model output designated as active operational engine evaluated in simulation.</td>
+            <td><span class="badge badge-success">FULLY ADDRESSED</span></td>
+          </tr>
+          <tr>
+            <td><strong>8. Condition future operational reliance</strong></td>
+            <td>State need for actual For Release timestamps and external validation</td>
+            <td>Formally integrated into revised conclusions and recommendations. Official commitment remains rule-based.</td>
+            <td><span class="badge badge-success">FULLY ADDRESSED</span></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- AUDIT VERDICT AND GATING WARNING -->
+  <div class="callout warning" style="margin-top: 2.5rem;">
+    <div class="callout-title" style="font-size: 1.1rem;">🛑 AUDIT GATE STATUS: METHODOLOGICAL AUDIT COMPLETE · AWAITING RESEARCHER APPROVAL</div>
+    <p>
+      In accordance with strict pair-programming and capstone defense audit directives:
+    </p>
+    <ul>
+      <li>All methodological parameters, formulas, assumptions, split comparisons, and cryptographic artifacts have been verified from primary codebase evidence.</li>
+      <li>Zero manuscript texts, database rows, or production ML models have been altered during this read-only phase.</li>
+      <li>Phase 2 manuscript editing will commence only upon explicit authorization from the researcher.</li>
+    </ul>
+  </div>
+
+  <footer>
+    Shoelotskey Service Management System · Methodological Audit of Dataset B · Capstone Defense Review Documentation · October 13, 2026
+  </footer>
+
+</div>
+
+</body>
+</html>

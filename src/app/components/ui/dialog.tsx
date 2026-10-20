@@ -69,6 +69,7 @@ const DialogContent = React.forwardRef<
       <DialogPrimitive.Content
         ref={ref}
         data-slot="dialog-content"
+        aria-describedby={props["aria-describedby"] ?? undefined}
         className={cn(
           "bg-background data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 fixed top-[50%] left-[50%] z-50 w-[calc(100vw-1.5rem)] sm:w-full max-h-[90dvh] translate-x-[-50%] translate-y-[-50%] rounded-2xl border shadow-2xl duration-200",
           !hasCustomLayout && "grid",
@@ -79,6 +80,8 @@ const DialogContent = React.forwardRef<
         )}
         {...props}
       >
+        <DialogPrimitive.Title className="sr-only">Dialog Window</DialogPrimitive.Title>
+        <DialogPrimitive.Description className="sr-only">Interactive dialog modal window</DialogPrimitive.Description>
         {children}
         {showCloseButton && (
           <DialogPrimitive.Close className={cn("ring-offset-background focus:ring-ring absolute top-4 right-4 z-50 h-8 w-8 rounded-full bg-slate-100 hover:bg-red-50 text-slate-500 hover:text-red-600 border border-slate-200/80 hover:border-red-200 flex items-center justify-center transition-all hover:scale-105 active:scale-95 shadow-xs focus:outline-hidden disabled:pointer-events-none [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4", closeClassName)}>

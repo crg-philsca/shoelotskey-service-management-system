@@ -28,6 +28,8 @@ __pycache__/
 *.sqlite3
 *.backup
 *_backup*
+backend/backups/
+scratch/
 backend/db/*.json
 backend/backup_pg_pre_sync.py
 

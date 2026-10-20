@@ -62,6 +62,10 @@ export function isColorRenewalAddon(addonName: string): boolean {
 
 type AddonEntry = { name: string; quantity?: number };
 
+function getAddonItemName(addon: string | { name?: string }): string {
+    return typeof addon === 'string' ? addon : addon?.name || '';
+}
+
 export function hasColorRenewal(baseServices: string[] = []): boolean {
     return (baseServices || []).some((s) => (s || '').includes('Color Renewal'));
 }
@@ -72,37 +76,36 @@ export function isColorCountAddon(name: string): boolean {
 
 /** Color Renewal may use 2 Colors or 3 Colors, never both. */
 export function applyColorCountExclusive(
-    addOns: AddonEntry[] = [],
+    addOns: Array<string | AddonEntry> = [],
     selectedName: string,
     checked: boolean,
     baseServices: string[] = [],
-): AddonEntry[] {
+): any[] {
     if (!isColorCountAddon(selectedName)) return addOns || [];
     const other = selectedName === TWO_COLORS ? THREE_COLORS : TWO_COLORS;
-    let next = [...(addOns || [])];
+    let next = (addOns || []).filter((addon) => getAddonItemName(addon) !== other);
 
     if (checked) {
-        next = next.filter((addon) => addon.name !== other);
-        if (!next.some((addon) => addon.name === selectedName)) {
+        if (!next.some((addon) => getAddonItemName(addon) === selectedName)) {
             next.push({ name: selectedName, quantity: 1 });
         }
         return next;
     }
 
-    return next.filter((addon) => addon.name !== selectedName);
+    return next.filter((addon) => getAddonItemName(addon) !== selectedName);
 }
 
 export function syncColorRenewalAddons(
-    addOns: AddonEntry[] = [],
+    addOns: Array<string | AddonEntry> = [],
     baseServices: string[] = [],
-): AddonEntry[] {
+): any[] {
     if (!hasColorRenewal(baseServices)) {
-        return (addOns || []).filter((addon) => !isColorCountAddon(addon.name));
+        return (addOns || []).filter((addon) => !isColorCountAddon(getAddonItemName(addon)));
     }
-    const hasTwo = (addOns || []).some((addon) => addon.name === TWO_COLORS);
-    const hasThree = (addOns || []).some((addon) => addon.name === THREE_COLORS);
+    const hasTwo = (addOns || []).some((addon) => getAddonItemName(addon) === TWO_COLORS);
+    const hasThree = (addOns || []).some((addon) => getAddonItemName(addon) === THREE_COLORS);
     if (hasTwo && hasThree) {
-        return (addOns || []).filter((addon) => addon.name !== THREE_COLORS);
+        return (addOns || []).filter((addon) => getAddonItemName(addon) !== THREE_COLORS);
     }
     return addOns || [];
 }
@@ -112,18 +115,216 @@ export function shoeHasBothColorCounts(addOns: Array<string | { name?: string }>
     return names.includes(TWO_COLORS) && names.includes(THREE_COLORS);
 }
 
+export interface ColorRenewalValidationResult {
+    isValid: boolean;
+    error?: string;
+    hasColorRenewal: boolean;
+    hasTwoColors: boolean;
+    hasThreeColors: boolean;
+}
+
+/**
+ * Validates Color Renewal selection and color count add-ons:
+ * 1. If Color Renewal is selected, require exactly one applicable color add-on: 2 Colors or 3 Colors.
+ * 2. Prevent selecting both color options for the same shoe.
+ * 3. If Color Renewal is not selected, neither color option should be selected.
+ */
+export function validateColorRenewalSelection(
+    baseServices: string[] = [],
+    addOns: Array<string | { name?: string }> = []
+): ColorRenewalValidationResult {
+    const hasCR = hasColorRenewal(baseServices);
+    const names = (addOns || []).map((a) => (typeof a === 'string' ? a : a?.name || ''));
+    const has2 = names.includes(TWO_COLORS);
+    const has3 = names.includes(THREE_COLORS);
+
+    if (hasCR) {
+        if (has2 && has3) {
+            return {
+                isValid: false,
+                error: 'Color Renewal cannot have both 2 Colors and 3 Colors selected for the same shoe.',
+                hasColorRenewal: true,
+                hasTwoColors: true,
+                hasThreeColors: true,
+            };
+        }
+        if (!has2 && !has3) {
+            return {
+                isValid: false,
+                error: 'Color Renewal requires selecting either 2 Colors or 3 Colors under Add-on Services.',
+                hasColorRenewal: true,
+                hasTwoColors: false,
+                hasThreeColors: false,
+            };
+        }
+        return {
+            isValid: true,
+            hasColorRenewal: true,
+            hasTwoColors: has2,
+            hasThreeColors: has3,
+        };
+    }
+
+    if (has2 || has3) {
+        return {
+            isValid: false,
+            error: '2 Colors or 3 Colors can only be selected when Color Renewal is selected.',
+            hasColorRenewal: false,
+            hasTwoColors: has2,
+            hasThreeColors: has3,
+        };
+    }
+
+    return {
+        isValid: true,
+        hasColorRenewal: false,
+        hasTwoColors: false,
+        hasThreeColors: false,
+    };
+}
+
 export function hasFullReglue(baseServices: string[] = []): boolean {
     return (baseServices || []).some((s) => norm(s) === 'full reglue');
 }
 
 export function syncFullReglueAddons(
-    addOns: AddonEntry[] = [],
+    addOns: Array<string | AddonEntry> = [],
     baseServices: string[] = [],
-): AddonEntry[] {
+): any[] {
     if (!hasFullReglue(baseServices)) {
-        return (addOns || []).filter((addon) => !isFullReglueSoleAddon(addon.name));
+        return (addOns || []).filter((addon) => !isFullReglueSoleAddon(getAddonItemName(addon)));
     }
     return addOns || [];
+}
+
+export interface FullReglueValidationResult {
+    isValid: boolean;
+    error?: string;
+    hasFullReglue: boolean;
+    hasSoleSelection: boolean;
+    soleAddonsCount: number;
+}
+
+/**
+ * Validates Full Reglue specification:
+ * 1. If Full Reglue is selected, at least one sole section (Midsole, Undersole, or both) must be selected.
+ * 2. If Full Reglue is not selected, neither Midsole nor Undersole should be selected.
+ */
+export function validateFullReglueSelection(
+    baseServices: string[] = [],
+    addOns: Array<string | { name?: string }> = []
+): FullReglueValidationResult {
+    const hasFR = hasFullReglue(baseServices);
+    const soleAddons = (addOns || []).filter((a) => isFullReglueSoleAddon(getAddonItemName(a)));
+
+    if (hasFR) {
+        if (soleAddons.length === 0) {
+            return {
+                isValid: false,
+                error: 'Full Reglue requires specifying the reglue location (Midsole, Undersole, or both) under Add-on Services.',
+                hasFullReglue: true,
+                hasSoleSelection: false,
+                soleAddonsCount: 0,
+            };
+        }
+        return {
+            isValid: true,
+            hasFullReglue: true,
+            hasSoleSelection: true,
+            soleAddonsCount: soleAddons.length,
+        };
+    }
+
+    if (soleAddons.length > 0) {
+        return {
+            isValid: false,
+            error: 'Midsole or Undersole reglue can only be selected when Full Reglue is selected.',
+            hasFullReglue: false,
+            hasSoleSelection: true,
+            soleAddonsCount: soleAddons.length,
+        };
+    }
+
+    return {
+        isValid: true,
+        hasFullReglue: false,
+        hasSoleSelection: false,
+        soleAddonsCount: 0,
+    };
+}
+
+export interface SolePricingDisplay {
+    isSoleAddon: boolean;
+    isCoveredByBase: boolean;
+    displayLabel: string; // "Included", "+₱150.00", or formatted price
+}
+
+/**
+ * Calculates dynamic pricing label for Full Reglue sole add-ons:
+ * - One location selected: "Included" (covered by base Full Reglue fee)
+ * - Both locations selected: "Included" for the included location, "+₱150.00" for the additional location.
+ */
+export function getSoleAddonPricingDisplay(
+    addonName: string,
+    selectedAddons: Array<string | { name?: string }> = [],
+    baseServices: string[] = [],
+    defaultPrice: number = 150
+): SolePricingDisplay {
+    const isFR = hasFullReglue(baseServices);
+    const isSole = isFullReglueSoleAddon(addonName);
+
+    if (!isFR || !isSole) {
+        return {
+            isSoleAddon: isSole,
+            isCoveredByBase: false,
+            displayLabel: `₱${defaultPrice.toFixed(2)}`,
+        };
+    }
+
+    const soleAddons = (selectedAddons || []).filter((a) => isFullReglueSoleAddon(getAddonItemName(a)));
+    const isThisSelected = soleAddons.some((a) => {
+        const aName = norm(getAddonItemName(a));
+        const curr = norm(addonName);
+        return aName === curr || (curr.includes('midsole') && aName.includes('midsole')) || (curr.includes('undersole') && aName.includes('undersole'));
+    });
+
+    if (!isThisSelected) {
+        return {
+            isSoleAddon: true,
+            isCoveredByBase: false,
+            displayLabel: '',
+        };
+    }
+
+    // Only one sole location selected: covered by base Full Reglue
+    if (soleAddons.length === 1) {
+        return {
+            isSoleAddon: true,
+            isCoveredByBase: true,
+            displayLabel: 'Included',
+        };
+    }
+
+    // Multiple sole locations selected:
+    // Whichever sole was selected first is covered/included, and the subsequent sole is chargeable (+₱150.00)
+    const firstSole = soleAddons[0];
+    const isFirstMidsole = norm(getAddonItemName(firstSole)).includes('midsole');
+    const isCurrentMidsole = norm(addonName).includes('midsole');
+    const isCovered = isFirstMidsole ? isCurrentMidsole : !isCurrentMidsole;
+
+    if (isCovered) {
+        return {
+            isSoleAddon: true,
+            isCoveredByBase: true,
+            displayLabel: 'Included',
+        };
+    }
+
+    return {
+        isSoleAddon: true,
+        isCoveredByBase: false,
+        displayLabel: '+₱150.00',
+    };
 }
 
 export function isAddonCompatibleWithSingleService(addonName: string, serviceName: string): boolean {
@@ -262,6 +463,76 @@ export function getApplicableRushFee(
         (!ps.connectedAddons || ps.connectedAddons.length === 0)
     );
     return generic || null;
+}
+
+/**
+ * Sorts add-ons for display according to user requirements:
+ * 1. If Full Reglue is chosen, its sole options (Full Reglue Midsole & Undersole) appear at the top row.
+ * 2. If Color Renewal is chosen, its options (2 Colors & 3 Colors) appear at the top row.
+ * 3. If both are chosen, whichever base service was checked first appears at Row 1, and the other at Row 2.
+ * 4. Remaining add-ons follow below sorted by sortOrder.
+ */
+export function sortAddonsForDisplay<T extends { name: string; sortOrder?: number | string }>(
+    addons: T[],
+    baseServices: string[] = []
+): T[] {
+    const frIndex = baseServices.findIndex(s => norm(s).includes('full reglue'));
+    const crIndex = baseServices.findIndex(s => norm(s).includes('color renewal'));
+
+    const hasFR = frIndex !== -1;
+    const hasCR = crIndex !== -1;
+
+    const getPriority = (addonName: string): number => {
+        const isFRAddon = isFullReglueSoleAddon(addonName);
+        const isCRAddon = isColorCountAddon(addonName);
+
+        if (hasFR && hasCR) {
+            if (frIndex < crIndex) {
+                // Full Reglue checked first -> Full Reglue row 1, Color Renewal row 2
+                if (isFRAddon) return 1;
+                if (isCRAddon) return 2;
+            } else {
+                // Color Renewal checked first -> Color Renewal row 1, Full Reglue row 2
+                if (isCRAddon) return 1;
+                if (isFRAddon) return 2;
+            }
+        } else if (hasFR) {
+            if (isFRAddon) return 1;
+        } else if (hasCR) {
+            if (isCRAddon) return 1;
+        }
+
+        return 3;
+    };
+
+    return [...addons].sort((a, b) => {
+        const prioA = getPriority(a.name);
+        const prioB = getPriority(b.name);
+        if (prioA !== prioB) {
+            return prioA - prioB;
+        }
+
+        // Within Full Reglue sole add-ons, Midsole first, then Undersole
+        if (isFullReglueSoleAddon(a.name) && isFullReglueSoleAddon(b.name)) {
+            const isMidA = norm(a.name).includes('midsole');
+            const isMidB = norm(b.name).includes('midsole');
+            if (isMidA && !isMidB) return -1;
+            if (!isMidA && isMidB) return 1;
+        }
+
+        // Within Color Renewal add-ons, 2 Colors first, then 3 Colors
+        if (isColorCountAddon(a.name) && isColorCountAddon(b.name)) {
+            if (a.name === TWO_COLORS && b.name === THREE_COLORS) return -1;
+            if (a.name === THREE_COLORS && b.name === TWO_COLORS) return 1;
+        }
+
+        // Default sort order
+        const sortA = Number(a.sortOrder) || 999;
+        const sortB = Number(b.sortOrder) || 999;
+        if (sortA !== sortB) return sortA - sortB;
+
+        return (a.name || '').localeCompare(b.name || '');
+    });
 }
 
 

@@ -1,0 +1,1053 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Final Reconciled Manuscript Revision Plan &amp; Technical Audit &bull; Shoelotskey SMS</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --primary: #0f172a;
+      --primary-light: #1e293b;
+      --accent: #2563eb;
+      --accent-hover: #1d4ed8;
+      --accent-soft: #eff6ff;
+      --success: #059669;
+      --success-bg: #ecfdf5;
+      --success-border: #a7f3d0;
+      --warning: #d97706;
+      --warning-bg: #fffbeb;
+      --warning-border: #fde68a;
+      --danger: #dc2626;
+      --danger-bg: #fef2f2;
+      --danger-border: #fecaca;
+      --purple: #7c3aed;
+      --purple-bg: #f5f3ff;
+      --purple-border: #ddd6fe;
+      --text: #0f172a;
+      --text-muted: #475569;
+      --text-subtle: #64748b;
+      --border: #e2e8f0;
+      --border-dark: #cbd5e1;
+      --bg: #f8fafc;
+      --card-bg: #ffffff;
+      --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+      --shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -2px rgba(0, 0, 0, 0.1);
+      --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -4px rgba(0, 0, 0, 0.1);
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background-color: var(--bg);
+      color: var(--text);
+      line-height: 1.6;
+      padding: 30px 20px 60px 20px;
+      font-size: 13.5px;
+    }
+
+    .container {
+      max-width: 1480px;
+      margin: 0 auto;
+      background: var(--card-bg);
+      border-radius: 16px;
+      box-shadow: var(--shadow-lg);
+      border: 1px solid var(--border);
+      overflow: hidden;
+    }
+
+    /* HEADER */
+    .header-banner {
+      background: linear-gradient(135deg, #0f172a 0%, #1e293b 50%, #1e3a8a 100%);
+      color: #ffffff;
+      padding: 40px 48px;
+      position: relative;
+    }
+
+    .header-banner::after {
+      content: "";
+      position: absolute;
+      top: 0; right: 0; bottom: 0; left: 0;
+      background: radial-gradient(circle at 90% 20%, rgba(37, 99, 235, 0.25) 0%, transparent 60%);
+      pointer-events: none;
+    }
+
+    .badge-bar {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-bottom: 18px;
+    }
+
+    .pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.6px;
+      padding: 5px 12px;
+      border-radius: 9999px;
+    }
+
+    .pill-blue { background: rgba(59, 130, 246, 0.2); color: #93c5fd; border: 1px solid rgba(147, 197, 253, 0.3); }
+    .pill-green { background: rgba(16, 185, 129, 0.2); color: #6ee7b7; border: 1px solid rgba(110, 231, 183, 0.3); }
+    .pill-amber { background: rgba(245, 158, 11, 0.2); color: #fde68a; border: 1px solid rgba(253, 230, 138, 0.3); }
+    .pill-purple { background: rgba(168, 85, 247, 0.2); color: #d8b4fe; border: 1px solid rgba(216, 180, 254, 0.3); }
+
+    .header-banner h1 {
+      font-size: 26px;
+      font-weight: 800;
+      letter-spacing: -0.5px;
+      line-height: 1.25;
+      margin-bottom: 12px;
+      color: #ffffff;
+    }
+
+    .header-banner .project-subtitle {
+      font-size: 14.5px;
+      color: #cbd5e1;
+      font-weight: 400;
+      max-width: 1050px;
+      line-height: 1.5;
+      margin-bottom: 24px;
+    }
+
+    .meta-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+      gap: 16px;
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 12px;
+      padding: 20px 24px;
+      backdrop-filter: blur(8px);
+    }
+
+    .meta-item .meta-label {
+      font-size: 11px;
+      color: #94a3b8;
+      text-transform: uppercase;
+      font-weight: 600;
+      letter-spacing: 0.5px;
+      margin-bottom: 4px;
+    }
+
+    .meta-item .meta-value {
+      font-size: 13px;
+      color: #f8fafc;
+      font-weight: 600;
+    }
+
+    /* NAVIGATION BAR */
+    .nav-bar {
+      background: #ffffff;
+      border-bottom: 1px solid var(--border);
+      padding: 12px 48px;
+      display: flex;
+      gap: 8px;
+      overflow-x: auto;
+      position: sticky;
+      top: 0;
+      z-index: 50;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.03);
+    }
+
+    .nav-btn {
+      text-decoration: none;
+      color: var(--text-muted);
+      font-size: 12px;
+      font-weight: 600;
+      padding: 6px 14px;
+      border-radius: 6px;
+      transition: all 0.15s ease;
+      white-space: nowrap;
+    }
+
+    .nav-btn:hover {
+      background: var(--bg);
+      color: var(--accent);
+    }
+
+    /* CONTENT BODY */
+    .content-body {
+      padding: 40px 48px;
+    }
+
+    section {
+      margin-bottom: 50px;
+    }
+
+    .section-title {
+      font-size: 19px;
+      font-weight: 700;
+      color: var(--primary);
+      margin-bottom: 8px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      border-bottom: 2px solid var(--border);
+      padding-bottom: 10px;
+    }
+
+    .section-desc {
+      color: var(--text-muted);
+      font-size: 13.5px;
+      margin-bottom: 20px;
+    }
+
+    /* CALLOUT BOXES */
+    .callout {
+      border-radius: 8px;
+      padding: 16px 20px;
+      margin-bottom: 24px;
+      font-size: 13px;
+      line-height: 1.55;
+    }
+
+    .callout-blue { background: var(--accent-soft); border-left: 4px solid var(--accent); color: #1e3a8a; }
+    .callout-green { background: var(--success-bg); border-left: 4px solid var(--success); color: #065f46; }
+    .callout-amber { background: var(--warning-bg); border-left: 4px solid var(--warning); color: #92400e; }
+    .callout-purple { background: var(--purple-bg); border-left: 4px solid var(--purple); color: #5b21b6; }
+    .callout-red { background: var(--danger-bg); border-left: 4px solid var(--danger); color: #991b1b; }
+
+    .callout-title {
+      font-weight: 700;
+      margin-bottom: 4px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    /* STATS & KPI */
+    .kpi-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 16px;
+      margin-bottom: 28px;
+    }
+
+    .kpi-card {
+      background: #ffffff;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 20px;
+      box-shadow: var(--shadow-sm);
+      transition: transform 0.15s ease, box-shadow 0.15s ease;
+    }
+
+    .kpi-card:hover {
+      transform: translateY(-2px);
+      box-shadow: var(--shadow);
+    }
+
+    .kpi-title {
+      font-size: 11px;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      font-weight: 700;
+      letter-spacing: 0.5px;
+      margin-bottom: 8px;
+    }
+
+    .kpi-value {
+      font-size: 24px;
+      font-weight: 800;
+      color: var(--primary);
+      line-height: 1.1;
+      margin-bottom: 6px;
+      font-feature-settings: "tnum";
+    }
+
+    .kpi-sub {
+      font-size: 12px;
+      color: var(--text-subtle);
+    }
+
+    /* TABLES */
+    .table-container {
+      background: #ffffff;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      overflow: hidden;
+      margin-bottom: 28px;
+      box-shadow: var(--shadow-sm);
+    }
+
+    .table-header-tools {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 12px 20px;
+      background: #f8fafc;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .table-caption {
+      font-size: 13px;
+      font-weight: 700;
+      color: var(--primary);
+    }
+
+    .btn-action {
+      background: #ffffff;
+      border: 1px solid var(--border-dark);
+      padding: 5px 12px;
+      border-radius: 6px;
+      font-size: 11.5px;
+      font-weight: 600;
+      color: var(--text-muted);
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      transition: all 0.15s ease;
+    }
+
+    .btn-action:hover {
+      background: var(--bg);
+      color: var(--text);
+      border-color: var(--accent);
+    }
+
+    .table-scroll {
+      overflow-x: auto;
+      max-height: 700px;
+    }
+
+    table.data-table {
+      width: 100%;
+      border-collapse: collapse;
+      text-align: left;
+      font-size: 12px;
+    }
+
+    table.data-table th {
+      background: #f1f5f9;
+      color: var(--primary);
+      font-weight: 700;
+      padding: 10px 12px;
+      border-bottom: 2px solid var(--border-dark);
+      white-space: nowrap;
+      position: sticky;
+      top: 0;
+      z-index: 10;
+    }
+
+    table.data-table td {
+      padding: 10px 12px;
+      border-bottom: 1px solid var(--border);
+      color: var(--text);
+      vertical-align: top;
+    }
+
+    table.data-table tr:hover td {
+      background: #f8fafc;
+    }
+
+    .text-center { text-align: center; }
+    .text-right { text-align: right; }
+    .mono { font-family: 'JetBrains Mono', monospace; font-size: 11px; }
+
+    /* TAGS & PRIORITY BADGES */
+    .badge-p0 { background: var(--danger-bg); color: var(--danger); border: 1px solid var(--danger-border); font-weight: 800; padding: 2px 8px; border-radius: 4px; font-size: 10.5px; }
+    .badge-p1 { background: var(--warning-bg); color: var(--warning); border: 1px solid var(--warning-border); font-weight: 700; padding: 2px 8px; border-radius: 4px; font-size: 10.5px; }
+    .badge-p2 { background: var(--accent-soft); color: var(--accent); border: 1px solid #bfdbfe; font-weight: 600; padding: 2px 8px; border-radius: 4px; font-size: 10.5px; }
+
+    .tag-verified { background: var(--success-bg); color: var(--success); border: 1px solid var(--success-border); padding: 2px 8px; border-radius: 4px; font-size: 10.5px; font-weight: 700; }
+    .tag-partial { background: var(--warning-bg); color: var(--warning); border: 1px solid var(--warning-border); padding: 2px 8px; border-radius: 4px; font-size: 10.5px; font-weight: 700; }
+    .tag-unverified { background: #fee2e2; color: #b91c1c; border: 1px solid #fca5a5; padding: 2px 8px; border-radius: 4px; font-size: 10.5px; font-weight: 700; }
+
+    /* FOOTER */
+    .report-footer {
+      background: #f8fafc;
+      border-top: 1px solid var(--border);
+      padding: 24px 48px;
+      color: var(--text-muted);
+      font-size: 12px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 16px;
+    }
+  </style>
+</head>
+<body>
+
+<div class="container">
+
+  <!-- HEADER BANNER -->
+  <header class="header-banner">
+    <div class="badge-bar">
+      <span class="pill pill-blue">Final Editorial Reconciliation</span>
+      <span class="pill pill-green">Read-Only Technical Audit</span>
+      <span class="pill pill-purple">Controlled Chapter-by-Chapter Sequence</span>
+      <span class="pill pill-amber">October 13, 2026</span>
+    </div>
+    <h1>FINAL RECONCILED MANUSCRIPT REVISION PLAN &amp; TECHNICAL AUDIT</h1>
+    <p class="project-subtitle">
+      Comprehensive harmonization of the Master Capstone Defense Revision Audit, the Technical Implementation Environment Report, evaluator annotations, and authentic codebase artifacts for Shoelotskey Villamor-Pasay.
+    </p>
+
+    <div class="meta-grid">
+      <div class="meta-item">
+        <div class="meta-label">Audit Scope</div>
+        <div class="meta-value">Final Reconciliation of Chapters 1&ndash;5 &amp; Appendices</div>
+      </div>
+      <div class="meta-item">
+        <div class="meta-label">Authoritative Baseline</div>
+        <div class="meta-value">Oct 7 v150 Baseline &bull; Oct 10 v152 Live Production</div>
+      </div>
+      <div class="meta-item">
+        <div class="meta-label">ML Evaluation Protocol</div>
+        <div class="meta-value">Dataset B Exclusively (10,000 Records, 12 Features)</div>
+      </div>
+      <div class="meta-item">
+        <div class="meta-label">Audit Standard</div>
+        <div class="meta-value">Strict Academic Integrity &bull; Zero Fabricated Numbers</div>
+      </div>
+    </div>
+  </header>
+
+  <!-- NAVIGATION TABS -->
+  <nav class="nav-bar">
+    <a href="#reconciliation" class="nav-btn">Report Reconciliation</a>
+    <a href="#ml-resolution" class="nav-btn">Critical ML Decisions</a>
+    <a href="#tech-specs" class="nav-btn">Technical Specs</a>
+    <a href="#revision-plan" class="nav-btn">Master Revision Table</a>
+    <a href="#sequence" class="nav-btn">Chapter Revision Sequence</a>
+    <a href="#evidence-index" class="nav-btn">Supporting Evidence</a>
+  </nav>
+
+  <!-- CONTENT BODY -->
+  <main class="content-body">
+
+    <!-- SECTION 1: RECONCILIATION OF THE TWO REPORTS -->
+    <section id="reconciliation">
+      <h2 class="section-title">
+        <span>Step 1 &mdash; Reconciliation of Prior Audit Reports</span>
+        <span class="tag-verified">Reconciled</span>
+      </h2>
+      <p class="section-desc">
+        Cross-examination of the 18 revision findings between the <em>Master Defense Revision Audit</em> and the <em>Implementation Environment Technical Audit</em>, identifying and resolving contradictions, terminology conflations, and unverified assertions.
+      </p>
+
+      <div class="kpi-grid">
+        <div class="kpi-card">
+          <div class="kpi-title">Total Examined Findings</div>
+          <div class="kpi-value">18</div>
+          <div class="kpi-sub">8 Critical (P0) &bull; 7 High (P1) &bull; 3 Minor (P2)</div>
+        </div>
+        <div class="kpi-card">
+          <div class="kpi-title">Verified Primary Ground Truths</div>
+          <div class="kpi-value" style="color: var(--success);">14</div>
+          <div class="kpi-sub">Fully supported by traceable repository artifacts</div>
+        </div>
+        <div class="kpi-card">
+          <div class="kpi-title">Partially Verified Disclosures</div>
+          <div class="kpi-value" style="color: var(--warning);">4</div>
+          <div class="kpi-sub">Requires explicit methodological footnotes / caveats</div>
+        </div>
+        <div class="kpi-card">
+          <div class="kpi-title">Unsubstantiated / Retracted Claims</div>
+          <div class="kpi-value" style="color: var(--danger);">0</div>
+          <div class="kpi-sub">Zero unverified or fabricated figures permitted</div>
+        </div>
+      </div>
+
+      <!-- DISCREPANCY RECONCILIATION TABLE -->
+      <div class="table-container">
+        <div class="table-header-tools">
+          <span class="table-caption">Table 1. Reconciliation of Inconsistencies Between Preliminary Audits and Repository Ground Truth</span>
+          <div class="table-actions">
+            <button class="btn-action" onclick="copyTable('table-discrepancies')">Copy Table</button>
+          </div>
+        </div>
+        <div class="table-scroll">
+          <table id="table-discrepancies" class="data-table">
+            <thead>
+              <tr>
+                <th style="width: 18%;">Audit Focus Area</th>
+                <th style="width: 25%;">Preliminary Inconsistent Finding</th>
+                <th style="width: 35%;">Reconciled Authoritative Ground Truth</th>
+                <th style="width: 22%;">Primary Repository Source</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><strong>ML Operational Status</strong></td>
+                <td>Described deployed model as "purely experimental prototype" or "advisory script"</td>
+                <td><strong>Active Operational Prediction Engine</strong>. The Random Forest Regressor is live at <code>/api/predict</code>. Crucially, the <strong>Official Standard Release Date</strong> remains rule-based for customer commitments, while the ML Predicted Release Date provides internal advisory estimates.</td>
+                <td class="mono">backend/completion_model.pkl<br>backend/main.py (/api/predict)</td>
+              </tr>
+              <tr>
+                <td><strong>ML Feature Predictor Count</strong></td>
+                <td>Early drafts cited "13 Features (Feature Set B)" across both historical and operational models</td>
+                <td><strong>12 Features (Feature Set C)</strong> in the final Dataset B model. Feature Set B (13 features) was used in exploratory historical research and included <code>full_restoration_qty</code>. Feature Set C removed full restoration (decomposed into minor restoration and canonical bundled templates).</td>
+                <td class="mono">backend/research_outputs/ml_final/dataset_b_final_test_metrics.json<br>backend/ml/historical_ml_engine.py</td>
+              </tr>
+              <tr>
+                <td><strong>Dataset B Signed Error &amp; Tolerances</strong></td>
+                <td>Cited bias as +0.0016 d or -0.0076 d; reported &plusmn;2d tolerance as 99.67%</td>
+                <td><strong>Authoritative Sealed Test Metrics (N=1,500)</strong>:<br>&bull; Mean Signed Error (Bias): <strong>-0.0018 days</strong> (-2.59 minutes underprediction)<br>&bull; MAE: <strong>0.0815 days</strong> (1.96 hours)<br>&bull; RMSE: <strong>0.4042 days</strong><br>&bull; R<sup>2</sup>: <strong>0.9976</strong><br>&bull; &plusmn;1-Day: <strong>97.20%</strong> (1,458/1,500)<br>&bull; &plusmn;2-Day: <strong>98.93%</strong> (1,484/1,500) (99.60% was on validation)</td>
+                <td class="mono">backend/research_outputs/ml_final/dataset_b_final_test_metrics.json (lines 42&ndash;68)</td>
+              </tr>
+              <tr>
+                <td><strong>Synthetic Data Generator Noise</strong></td>
+                <td>Hypothesized Gaussian noise injection (&sigma;) or random variance pertubations</td>
+                <td><strong>Deterministic Rule-Based Simulation</strong>. Dataset B was generated using <code>np.random.default_rng(20261002)</code> sampling canonical templates, applying shop base turnaround days, rush priority (-3 operating days), and Sunday/holiday calendar rollovers. <strong>Zero Gaussian noise was injected.</strong></td>
+                <td class="mono">backend/research_outputs/ml_final/generate_dataset_b.py<br>dataset_b_generator_config.json</td>
+              </tr>
+              <tr>
+                <td><strong>Deployment Timeline &amp; Pilot Attribution</strong></td>
+                <td>Conflated October 7 release v150 as the "September pilot baseline"</td>
+                <td><strong>Strict Temporal Attribution</strong>:<br>&bull; <em>Sept 2&ndash;16, 2026:</em> Shop pilot counter intake on deployed build <code>deployed-heroku-20260913</code>.<br>&bull; <em>Sept 17&ndash;22, 2026:</em> Evaluator survey and retrieval testing.<br>&bull; <em>Oct 7, 2026:</em> Heroku release <code>v150</code> (Commit <code>1f93846c</code>) is the <strong>manuscript baseline configuration</strong>.<br>&bull; <em>Oct 10, 2026:</em> Heroku release <code>v152</code> (Commit <code>777f8efb</code>) is the <strong>active cloud production configuration</strong>.</td>
+                <td class="mono">docs/Official Documentation/Final Defense/TECHNICAL_AUDIT_IMPLEMENTATION_ENVIRONMENT_REPORT.html</td>
+              </tr>
+              <tr>
+                <td><strong>Empty Pilot Dump File Conflict</strong></td>
+                <td>Assumed shop pilot had 0 orders because <code>pilot_db_dump.json</code> has <code>total_pilot_orders: 0</code></td>
+                <td><code>pilot_db_dump.json</code> was an unpopulated script export placeholder. The authoritative ground truth is <code>backend/db/shoelotskey_pre_historical_import_backup.db</code>, containing exactly <strong>31 digital job orders</strong> recorded between Sept 2 and Sept 16, 2026.</td>
+                <td class="mono">backend/db/shoelotskey_pre_historical_import_backup.db (orders table, 31 rows)</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- SECTION 2: RESOLUTION OF CRITICAL RESEARCH ISSUES -->
+    <section id="ml-resolution">
+      <h2 class="section-title">
+        <span>Step 2 &mdash; Critical Research &amp; Machine Learning Directives</span>
+        <span class="tag-verified">Resolved</span>
+      </h2>
+      <p class="section-desc">
+        Binding methodological decisions governing Chapter 3 research procedures, Chapter 4 results, and capstone oral defense.
+      </p>
+
+      <div class="callout callout-blue">
+        <div class="callout-title">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg>
+          1. Exclusive Focus on Dataset B Operational Model
+        </div>
+        The formal machine learning performance evaluation in Chapter 4 must focus <strong>strictly and exclusively on Dataset B (10,000 simulated operational records)</strong>. Dataset A ($N=119$ historical paper receipts) must <strong>NOT</strong> be reintroduced as a second formal ML evaluation. Instead, Dataset A is documented strictly in Chapter 3 as historical diagnostic provenance, demonstrating why historical paper claim dates cannot measure craft completion times and establishing the 35 canonical workshop service templates.
+      </div>
+
+      <div class="callout callout-purple">
+        <div class="callout-title">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>
+          2. Dual-Date Operational Architecture Distinction
+        </div>
+        The manuscript must clearly differentiate the two release dates computed by the system:
+        <ul style="padding-left: 20px; margin-top: 6px;">
+          <li><strong>Official Expected Release Date (Standard Release Date):</strong> Deterministic rule-based calculation enforcing shop commitments (base turnaround days + rush modifier + workshop calendar rollovers). This date governs customer claims and payment policies.</li>
+          <li><strong>ML Predicted Release Date:</strong> Continuous predictive estimate generated in real-time by the Random Forest Regressor at <code>/api/predict</code>. It serves an internal advisory role for workload balancing.</li>
+        </ul>
+      </div>
+
+      <div class="callout callout-amber">
+        <div class="callout-title">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>
+          3. Mandatory Generalization Caveat (Simulated vs. Real-World Accuracy)
+        </div>
+        Researchers must <strong>never claim that high test performance ($R^2 = 0.9976$, $	ext{MAE} = 0.0815	ext{ days}$) proves real-world prediction accuracy</strong>. The manuscript must explicitly disclose that this high accuracy represents the Random Forest's mathematical convergence on deterministic workshop business rules embedded in Dataset B's generation logic. Live operational accuracy against human customer pickup delays remains to be evaluated once historical `For Release` timestamps accumulate over multi-month live operations.
+      </div>
+    </section>
+
+    <!-- SECTION 3: RECONCILE TECHNICAL SPECIFICATIONS -->
+    <section id="tech-specs">
+      <h2 class="section-title">
+        <span>Step 3 &mdash; Reconciled Implementation Environment &amp; Specifications</span>
+        <span class="tag-verified">Verified</span>
+      </h2>
+      <p class="section-desc">
+        Harmonization of the four-tier dependency architecture based on the latest verified production inspection.
+      </p>
+
+      <div class="table-container">
+        <div class="table-header-tools">
+          <span class="table-caption">Table 2. Reconciled Four-Tier Software Architecture Matrix (Chapter 3, Table 16 Baseline)</span>
+          <div class="table-actions">
+            <button class="btn-action" onclick="copyTable('table-architecture')">Copy Table</button>
+          </div>
+        </div>
+        <div class="table-scroll">
+          <table id="table-architecture" class="data-table">
+            <thead>
+              <tr>
+                <th style="width: 16%;">Component</th>
+                <th style="width: 14%;">Technology</th>
+                <th style="width: 18%;">Declared Range</th>
+                <th style="width: 16%;">Lockfile Version</th>
+                <th style="width: 16%;">Local Dev Version</th>
+                <th style="width: 20%;">Verified Cloud Production</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><strong>UI Framework</strong></td>
+                <td>React / React DOM</td>
+                <td><code>18.3.1 (Exact)</code></td>
+                <td><strong>18.3.1</strong></td>
+                <td>18.3.1</td>
+                <td>18.3.1 (via static bundle)</td>
+              </tr>
+              <tr>
+                <td><strong>Language Spec</strong></td>
+                <td>TypeScript</td>
+                <td><code>^5.9.3</code> (&ge; 5.9.3)</td>
+                <td><strong>5.9.3</strong></td>
+                <td>5.9.3</td>
+                <td>Compiled during buildpack</td>
+              </tr>
+              <tr>
+                <td><strong>Frontend Bundler</strong></td>
+                <td>Vite Build Tool</td>
+                <td><code>^6.4.1</code> (&ge; 6.4.1)</td>
+                <td><strong>6.4.3</strong></td>
+                <td>6.4.3</td>
+                <td>Vite 6.4.3 build execution</td>
+              </tr>
+              <tr>
+                <td><strong>CSS Engine</strong></td>
+                <td>Tailwind CSS</td>
+                <td><code>4.1.12 (Exact)</code></td>
+                <td><strong>4.1.12</strong></td>
+                <td>4.1.12</td>
+                <td>Compiled into application CSS</td>
+              </tr>
+              <tr>
+                <td><strong>Client Routing</strong></td>
+                <td>React Router DOM</td>
+                <td><code>^7.11.0</code> (&ge; 7.11.0)</td>
+                <td><strong>7.18.2</strong></td>
+                <td>7.18.2</td>
+                <td>Bundled client-side routing</td>
+              </tr>
+              <tr>
+                <td><strong>Application Server</strong></td>
+                <td>Python / FastAPI</td>
+                <td><code>&ge;0.110.0</code></td>
+                <td>Pip-installed runtime</td>
+                <td>FastAPI 0.135.1 (Py 3.14.3)</td>
+                <td>Python 3.12 / FastAPI (Py 3.11.11 runtime)</td>
+              </tr>
+              <tr>
+                <td><strong>WSGI / ASGI Server</strong></td>
+                <td>Gunicorn + Uvicorn</td>
+                <td><code>25.1.0</code> / <code>&ge;0.28.0</code></td>
+                <td>Pip-installed runtime</td>
+                <td>Gunicorn 25.1.0, Uvicorn 0.42.0</td>
+                <td>Gunicorn (-w 1) + UvicornWorker</td>
+              </tr>
+              <tr>
+                <td><strong>Relational Database</strong></td>
+                <td>PostgreSQL / SQLite</td>
+                <td>ACID Relational SQL</td>
+                <td>PostgreSQL 17 compatible</td>
+                <td>SQLite 3.50.4 (Local mirror)</td>
+                <td><strong>PostgreSQL 17.10</strong> (Essential-0, 15.8 MB, 38 Tables)</td>
+              </tr>
+              <tr>
+                <td><strong>Database Adapter</strong></td>
+                <td>SQLAlchemy / Psycopg</td>
+                <td><code>&ge;2.0.28</code></td>
+                <td>Pip-installed runtime</td>
+                <td>SQLAlchemy 2.0.48 / Psycopg 3.3.3</td>
+                <td>SQLAlchemy 2.0.x / Psycopg 3.3.3</td>
+              </tr>
+              <tr>
+                <td><strong>PaaS Dyno Formation</strong></td>
+                <td>Heroku Dyno</td>
+                <td>Single Container</td>
+                <td>Heroku Procfile</td>
+                <td>Local uvicorn reload</td>
+                <td><strong>1x Basic Web Dyno</strong> (512 MB; FastAPI serves <code>dist/</code>)</td>
+              </tr>
+              <tr>
+                <td><strong>ML Operational Model</strong></td>
+                <td>Scikit-Learn Random Forest</td>
+                <td>300 Trees, Depth 12</td>
+                <td>Feature Set C (12 Feat)</td>
+                <td>Scikit-learn 1.8.0</td>
+                <td><code>completion_model.pkl</code> (SHA-256: <code>9ce390ca...</code>)</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- SECTION 4: AUTHORITATIVE MASTER REVISION PLAN TABLE -->
+    <section id="revision-plan">
+      <h2 class="section-title">
+        <span>Step 4 &mdash; Authoritative Master Revision Plan Table (REV-01 to REV-18)</span>
+        <span class="tag-verified">Ready for Editing</span>
+      </h2>
+      <p class="section-desc">
+        Complete 8-column reconciliation matrix mapping all 18 panel and technical revision items directly to exact manuscript sections, existing text, required corrections, priorities, and verification proofs.
+      </p>
+
+      <div class="table-container">
+        <div class="table-header-tools">
+          <span class="table-caption">Table 3. Comprehensive Manuscript Revision Checklist and Reconciliation Plan</span>
+          <div class="table-actions">
+            <button class="btn-action" onclick="copyTable('table-revision-master')">Copy Table</button>
+          </div>
+        </div>
+        <div class="table-scroll">
+          <table id="table-revision-master" class="data-table">
+            <thead>
+              <tr>
+                <th style="width: 6%;">Rev ID</th>
+                <th style="width: 14%;">Panelist / Auditor Source</th>
+                <th style="width: 11%;">Chapter &amp; Section</th>
+                <th style="width: 18%;">Current Manuscript Text</th>
+                <th style="width: 25%;">Required Academic Correction</th>
+                <th style="width: 16%;">Supporting Evidence Ground Truth</th>
+                <th style="width: 5%;" class="text-center">Priority</th>
+                <th style="width: 5%;" class="text-center">Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td class="mono"><strong>REV-01</strong></td>
+                <td>Prof. Vista &amp; Prof. Alojado</td>
+                <td>Ch. 1: Introduction (pp. 1&ndash;2, 7&ndash;9)</td>
+                <td>Opening paragraphs lead with generic global MSME statistics; Shoelotskey shop context delayed until p. 7.</td>
+                <td>Reorganize Chapter 1 so that Shoelotskey's physical operating problems (paper receipt stubs, missing dates, delayed reporting) lead immediately. Frame broader MSME literature as secondary background.</td>
+                <td class="mono">Pre-assessment notes (March 2026); Manuscript pp. 1&ndash;9</td>
+                <td class="text-center"><span class="badge-p0">P0</span></td>
+                <td class="text-center"><span class="tag-verified">VERIFIED</span></td>
+              </tr>
+              <tr>
+                <td class="mono"><strong>REV-02</strong></td>
+                <td>Prof. Alojado</td>
+                <td>Ch. 1: Problem Statement (pp. 2&ndash;5) &amp; Ch. 4 (pp. 144&ndash;146)</td>
+                <td>"Record retrieval time for customer history: 15&ndash;30 minutes per request..." alongside 5.20 min in Table 17.</td>
+                <td>Explicitly designate 15&ndash;30 min and 3&ndash;10 min as qualitative pre-assessment interview estimates (March 5&ndash;15, 2026). Differentiate from the controlled 10-trial stopwatch benchmark (manual mean 5.20 min vs digital 0.41 min).</td>
+                <td class="mono">Manuscript Table 17; CHAPTER4_NUMERICAL_AUDIT.csv</td>
+                <td class="text-center"><span class="badge-p0">P0</span></td>
+                <td class="text-center"><span class="tag-verified">VERIFIED</span></td>
+              </tr>
+              <tr>
+                <td class="mono"><strong>REV-03</strong></td>
+                <td>Prof. Alojado (Handwritten annotation)</td>
+                <td>Ch. 1: Conceptual Framework (pp. 11&ndash;13, Fig. 1)</td>
+                <td>Heading reads "Conceptual Framework". Narrative conflates Evaluation with live process flow.</td>
+                <td>Rename heading and figure caption to "Contextual Framework" per Sir Alojado's directive. Clarify that Process = live operations, Evaluation = research testing, and Feedback = roadmap improvements.</td>
+                <td class="mono">Annotated draft p. 11; NAAP Capstone Outline</td>
+                <td class="text-center"><span class="badge-p0">P0</span></td>
+                <td class="text-center"><span class="tag-verified">VERIFIED</span></td>
+              </tr>
+              <tr>
+                <td class="mono"><strong>REV-04</strong></td>
+                <td>Prof. Vista (Underlined annotation)</td>
+                <td>Ch. 1: Specific Objectives (p. 13, Obj. 1)</td>
+                <td>"1. Develop and implement a centralized digital job order entry... reducing retrieval time from 15-30 min to less than 5 min."</td>
+                <td>Ensure all 3 evaluation dimensions &mdash; record accessibility, retrieval time, and data accuracy &mdash; are explicitly articulated in Specific Objective 1 and mirrored in Chapter 4 and Chapter 5.</td>
+                <td class="mono">Annotated draft p. 13; Specific Objective 1</td>
+                <td class="text-center"><span class="badge-p0">P0</span></td>
+                <td class="text-center"><span class="tag-verified">VERIFIED</span></td>
+              </tr>
+              <tr>
+                <td class="mono"><strong>REV-05</strong></td>
+                <td>Prof. Vista &amp; Prof. Alojado (Panel Directive)</td>
+                <td>Ch. 1: Obj. 2 (p. 13) &amp; Ch. 4: ML (pp. 150&ndash;156)</td>
+                <td>Objective 2 implies evaluating historical model alongside operational model using 85% target accuracy.</td>
+                <td>Focus Objective 2 exclusively on Dataset B operational Random Forest Regressor (10,000 synthetic orders). Relegate Dataset A (119 receipts) to historical diagnostic provenance explaining why paper claim dates measure pickup latency.</td>
+                <td class="mono">dataset_b_final_test_metrics.json; 06_ml_research_summary.md</td>
+                <td class="text-center"><span class="badge-p0">P0</span></td>
+                <td class="text-center"><span class="tag-verified">VERIFIED</span></td>
+              </tr>
+              <tr>
+                <td class="mono"><strong>REV-06</strong></td>
+                <td>Prof. Alojado</td>
+                <td>Ch. 1: Obj. 4 (p. 14) &amp; Ch. 4 (Tables 25&ndash;36)</td>
+                <td>Obj. 4 lists 7 characteristics, omitting Interaction Capability, Flexibility, and Safety.</td>
+                <td>Align Objective 4 to the 9 characteristics of ISO/IEC 25010:2023 across Objectives, Methodology, Tables 25&ndash;34, Summary Table 36, and Conclusions.</td>
+                <td class="mono">Annotated draft p. 14; ISO/IEC 25010:2023 Standard</td>
+                <td class="text-center"><span class="badge-p0">P0</span></td>
+                <td class="text-center"><span class="tag-verified">VERIFIED</span></td>
+              </tr>
+              <tr>
+                <td class="mono"><strong>REV-07</strong></td>
+                <td>Prof. Vista (Handwritten notes)</td>
+                <td>Ch. 3: Process Modeling (pp. 95&ndash;99, Fig. 5)</td>
+                <td>Flow lines in DFD Level 1 contain verb labels, boxed actions, and mismatch Level 0 external entities.</td>
+                <td>Redraw / relabel Figure 5 so that flow lines contain pure data nouns ("Order Details", "Payment Receipt"); ensure external entities and data stores D1&ndash;D6 strictly balance Level 0.</td>
+                <td class="mono">Annotated draft pp. 95&ndash;99; Structured Analysis Rules</td>
+                <td class="text-center"><span class="badge-p1">P1</span></td>
+                <td class="text-center"><span class="tag-verified">VERIFIED</span></td>
+              </tr>
+              <tr>
+                <td class="mono"><strong>REV-08</strong></td>
+                <td>Prof. Vista (Handwritten notes)</td>
+                <td>Ch. 4: Demographic Profile (p. 142, Fig. 12)</td>
+                <td>Figure 12 (Shoelotskey Organizational Chart) placed directly inside Chapter 4 body text.</td>
+                <td>Relocate Figure 12 to Appendix A. Retain concise text identifying the 6 internal personnel (2 owners, 4 staff members) in Section 4.1.</td>
+                <td class="mono">Annotated draft p. 142; NAAP Thesis Guidelines</td>
+                <td class="text-center"><span class="badge-p1">P1</span></td>
+                <td class="text-center"><span class="tag-verified">VERIFIED</span></td>
+              </tr>
+              <tr>
+                <td class="mono"><strong>REV-09</strong></td>
+                <td>Prof. Vista (Handwritten notes)</td>
+                <td>Ch. 4: Record Retrieval (p. 145, Table 17)</td>
+                <td>Table 17 presents summary times for 10 trials without attached raw stopwatch trial logs.</td>
+                <td>Bind complete 10-trial measurement table with order IDs, timestamps, and researcher roles in Appendix B (or Appendix F). Distinguish 1.8 s API latency from 24.6 s human UI interaction time. Note Sept 22 execution dates.</td>
+                <td class="mono">docs/research_evidence_audit/02_RECORD_RETRIEVAL_APPENDIX.md</td>
+                <td class="text-center"><span class="badge-p0">P0</span></td>
+                <td class="text-center"><span class="tag-verified">VERIFIED</span></td>
+              </tr>
+              <tr>
+                <td class="mono"><strong>REV-10</strong></td>
+                <td>Prof. Vista</td>
+                <td>Ch. 4: Editorial Residue (pp. 152, 153, 158)</td>
+                <td>Contains editorial text: "Your manuscript already establishes...", truncated filename <code>analytics_dashboard_reproducibi...</code>.</td>
+                <td>Excise all second-person editorial comments; repair truncated filename on p. 158 to formally cite Appendix C; fix Table 24 cross-reference to Table 42 on p. 204.</td>
+                <td class="mono">Annotated draft pp. 152, 153, 158</td>
+                <td class="text-center"><span class="badge-p0">P0</span></td>
+                <td class="text-center"><span class="tag-verified">VERIFIED</span></td>
+              </tr>
+              <tr>
+                <td class="mono"><strong>REV-11</strong></td>
+                <td>Prof. Alojado</td>
+                <td>Ch. 4: Demographics (pp. 140&ndash;143)</td>
+                <td>Generic mention of 5 IT experts without demographic profile table.</td>
+                <td>Insert comprehensive IT Expert Profile Table in Section 4.1 listing names, highest degrees, institutional affiliations, and specializations (E1 to E5).</td>
+                <td class="mono">docs/Official Documentation/IT Experts/</td>
+                <td class="text-center"><span class="badge-p0">P0</span></td>
+                <td class="text-center"><span class="tag-verified">VERIFIED</span></td>
+              </tr>
+              <tr>
+                <td class="mono"><strong>REV-12</strong></td>
+                <td>Prof. Vista</td>
+                <td>Ch. 4: Likert Scales (pp. 137, 162, 164, 195)</td>
+                <td>Unequal 4-point Likert interpretation intervals (1.00&ndash;1.50, 1.51&ndash;2.50, 2.51&ndash;3.50, 3.51&ndash;4.00).</td>
+                <td>Evaluate equal-width standard (1.00&ndash;1.75, 1.76&ndash;2.50, 2.51&ndash;3.25, 3.26&ndash;4.00); state consequences on item ratings; emphasize that scores measure perceptions, not formal certification.</td>
+                <td class="mono">Vista Summary Evaluation p. 8; Prescribed NAAP Likert Scale</td>
+                <td class="text-center"><span class="badge-p1">P1</span></td>
+                <td class="text-center"><span class="tag-verified">VERIFIED</span></td>
+              </tr>
+              <tr>
+                <td class="mono"><strong>REV-13</strong></td>
+                <td>Prof. Vista</td>
+                <td>Ch. 1, 2, 4, 5: Model Generalization (pp. 16, 153&ndash;155)</td>
+                <td>High test performance (R<sup>2</sup> = 0.9976) described without disclosing shared synthetic generator rules.</td>
+                <td>Explicitly classify Dataset B model as an operational prediction engine evaluated within a simulated environment; state that demonstration of real-world accuracy requires accumulating future Ready-for-Release timestamps.</td>
+                <td class="mono">dataset_b_final_test_metrics.json (interpretation boundary statement)</td>
+                <td class="text-center"><span class="badge-p0">P0</span></td>
+                <td class="text-center"><span class="tag-verified">VERIFIED</span></td>
+              </tr>
+              <tr>
+                <td class="mono"><strong>REV-14</strong></td>
+                <td>Prof. Vista</td>
+                <td>Ch. 4: Reporting Speed (pp. 158&ndash;161, 210)</td>
+                <td>Compares manual human preparation (43.71 min) directly with API response time (0.0838 s).</td>
+                <td>Separate technical API benchmark (0.0838 s) from end-to-end user workflow; qualify that 99.9968% reduction applies to automated query execution for digitized records.</td>
+                <td class="mono">analytics_dashboard_benchmark_raw_results.csv (70 trials)</td>
+                <td class="text-center"><span class="badge-p1">P1</span></td>
+                <td class="text-center"><span class="tag-verified">VERIFIED</span></td>
+              </tr>
+              <tr>
+                <td class="mono"><strong>REV-15</strong></td>
+                <td>Prof. Vista</td>
+                <td>Ch. 4: Title Heading (p. 128)</td>
+                <td>Heading reads plural "Research Methodology, Results and Discussions".</td>
+                <td>Change heading to "Research Methodology, Results and Discussion" (singular) to strictly conform to NAAP outline.</td>
+                <td class="mono">NAAP Institute of Computer Studies Thesis Manual</td>
+                <td class="text-center"><span class="badge-p2">P2</span></td>
+                <td class="text-center"><span class="tag-verified">VERIFIED</span></td>
+              </tr>
+              <tr>
+                <td class="mono"><strong>REV-16</strong></td>
+                <td>Prof. Vista</td>
+                <td>Ch. 4: Section Numbering (p. 150)</td>
+                <td>Subsection numbering typo: appears as ".4.3 Machine Learning Model Evaluation."</td>
+                <td>Remove errant leading period; ensure clean standard heading: "4.3 Machine Learning Model Evaluation".</td>
+                <td class="mono">Manuscript draft p. 150</td>
+                <td class="text-center"><span class="badge-p2">P2</span></td>
+                <td class="text-center"><span class="tag-verified">VERIFIED</span></td>
+              </tr>
+              <tr>
+                <td class="mono"><strong>REV-17</strong></td>
+                <td>Prof. Vista</td>
+                <td>Ch. 3: Grammar Typo (p. 118)</td>
+                <td>"As shown in the Table 15, The system security functional testing..."</td>
+                <td>Correct to: "As shown in Table 15, the system security functional testing...".</td>
+                <td class="mono">Manuscript draft p. 118</td>
+                <td class="text-center"><span class="badge-p2">P2</span></td>
+                <td class="text-center"><span class="tag-verified">VERIFIED</span></td>
+              </tr>
+              <tr>
+                <td class="mono"><strong>REV-18</strong></td>
+                <td>Prof. Vista &amp; Prof. Alojado</td>
+                <td>Ch. 5: Recommendations (pp. 216&ndash;218)</td>
+                <td>Suggests operational reliance on ML completion dates without conditioning on real-world validation.</td>
+                <td>Condition recommendations: System is recommended for centralized records and reporting; ML Predicted Release Date must remain advisory alongside rule-based dates until real `For Release` data is validated.</td>
+                <td class="mono">Chapter 5 Recommendations draft; Vista Evaluation p. 6</td>
+                <td class="text-center"><span class="badge-p0">P0</span></td>
+                <td class="text-center"><span class="tag-verified">VERIFIED</span></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- SECTION 5: RECOMMENDED REVISION SEQUENCE -->
+    <section id="sequence">
+      <h2 class="section-title">
+        <span>Step 5 &mdash; Recommended Controlled Chapter-by-Chapter Revision Sequence</span>
+        <span class="tag-verified">Workflow Protocol</span>
+      </h2>
+      <p class="section-desc">
+        To maintain research integrity and prevent cross-chapter contradictions, execute edits in the following strict sequential phases:
+      </p>
+
+      <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 16px;">
+        <div style="background: #ffffff; border: 1px solid var(--border); border-radius: 8px; padding: 18px; box-shadow: var(--shadow-sm);">
+          <div style="font-weight: 700; color: var(--accent); margin-bottom: 6px;">Phase 1: Chapter 1 &amp; Front Matter</div>
+          <ul style="padding-left: 18px; font-size: 12px; color: var(--text-muted); line-height: 1.6;">
+            <li>Lead immediately with Shoelotskey operating friction (REV-01).</li>
+            <li>Qualify pre-assessment interview estimates (REV-02).</li>
+            <li>Rename to "Contextual Framework" (REV-03).</li>
+            <li>Include 3 evaluation dimensions in Obj. 1 (REV-04).</li>
+            <li>Focus Obj. 2 on Dataset B operational model (REV-05).</li>
+            <li>Align Obj. 4 to 9 ISO/IEC 25010 characteristics (REV-06).</li>
+            <li>Document Dual-Date operational architecture.</li>
+          </ul>
+        </div>
+
+        <div style="background: #ffffff; border: 1px solid var(--border); border-radius: 8px; padding: 18px; box-shadow: var(--shadow-sm);">
+          <div style="font-weight: 700; color: var(--accent); margin-bottom: 6px;">Phase 2: Chapter 2 (Literature Review)</div>
+          <ul style="padding-left: 18px; font-size: 12px; color: var(--text-muted); line-height: 1.6;">
+            <li>Harmonize ML completion prediction literature to emphasize supervised tabular regression.</li>
+            <li>Ground literature synthesis in MSME single-branch low-overhead trade shops.</li>
+            <li>Frame Random Forest vs Deep Learning justification on tabular data.</li>
+            <li>Ensure all 2022&ndash;2026 citations reflect peer-reviewed sources.</li>
+          </ul>
+        </div>
+
+        <div style="background: #ffffff; border: 1px solid var(--border); border-radius: 8px; padding: 18px; box-shadow: var(--shadow-sm);">
+          <div style="font-weight: 700; color: var(--accent); margin-bottom: 6px;">Phase 3: Chapter 3 (Methodology &amp; Architecture)</div>
+          <ul style="padding-left: 18px; font-size: 12px; color: var(--text-muted); line-height: 1.6;">
+            <li>Redraw / relabel DFD Level 1 with data nouns (REV-07).</li>
+            <li>Document Dataset B generator, 12 features, and zero-noise logic (REV-13).</li>
+            <li>Relegate Dataset A to historical diagnostic provenance.</li>
+            <li>Preserve Table 16 Technology Stack (single shared Basic dyno, Postgres 17.10).</li>
+            <li>Correct grammatical typo in Section 3.6 (REV-17).</li>
+          </ul>
+        </div>
+
+        <div style="background: #ffffff; border: 1px solid var(--border); border-radius: 8px; padding: 18px; box-shadow: var(--shadow-sm);">
+          <div style="font-weight: 700; color: var(--accent); margin-bottom: 6px;">Phase 4: Chapter 4 (Results &amp; Discussion)</div>
+          <ul style="padding-left: 18px; font-size: 12px; color: var(--text-muted); line-height: 1.6;">
+            <li>Correct chapter heading to singular "Discussion" (REV-15).</li>
+            <li>Insert comprehensive IT Expert Profile Table in Sec 4.1 (REV-11).</li>
+            <li>Relocate Figure 12 Org Chart to Appendix A (REV-08).</li>
+            <li>Bind Table 17 retrieval benchmark with Sept 22 disclosure (REV-09).</li>
+            <li>Fix subsection numbering typo ".4.3" (REV-16).</li>
+            <li>Excise second-person editorial comments (REV-10).</li>
+            <li>Present Dataset B final test metrics (MAE 0.0815 d, R<sup>2</sup> = 0.9976) with simulation boundary caveat (REV-13).</li>
+            <li>Separate API query speed from human reporting workflow (REV-14).</li>
+            <li>Present dual reporting on Likert interpretation ranges (REV-12).</li>
+          </ul>
+        </div>
+
+        <div style="background: #ffffff; border: 1px solid var(--border); border-radius: 8px; padding: 18px; box-shadow: var(--shadow-sm);">
+          <div style="font-weight: 700; color: var(--accent); margin-bottom: 6px;">Phase 5: Chapter 5 &amp; Appendices</div>
+          <ul style="padding-left: 18px; font-size: 12px; color: var(--text-muted); line-height: 1.6;">
+            <li>Align Conclusions directly to Objectives 1&ndash;5.</li>
+            <li>Condition Recommendations: operational reliance for records/reporting, advisory role for ML (REV-18).</li>
+            <li>Bind verified Appendices A through F (Retrieval trials, dashboard benchmarks, ISO test suite, 31 pilot orders, historical receipts, Dataset B specifications).</li>
+          </ul>
+        </div>
+      </div>
+    </section>
+
+    <!-- SECTION 6: SUPPORTING EVIDENCE LOCATIONS -->
+    <section id="evidence-index">
+      <h2 class="section-title">
+        <span>Master Evidence Repository Ground Truth Sources</span>
+        <span class="tag-verified">Traceable</span>
+      </h2>
+      <div class="table-container">
+        <div class="table-scroll">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th style="width: 25%;">Evidence Item</th>
+                <th style="width: 45%;">Repository File Location</th>
+                <th style="width: 30%;">Key Empirical Metric</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr><td><strong>10-Trial Retrieval Measurement</strong></td><td class="mono">docs/06_Audit_Data_and_CSV_Matrices/CHAPTER4_NUMERICAL_AUDIT.csv</td><td>5.20 min &rarr; 0.41 min (92.12% reduction)</td></tr>
+              <tr><td><strong>70-Trial Reporting Benchmark</strong></td><td class="mono">docs/06_Audit_Data_and_CSV_Matrices/analytics_dashboard_benchmark_raw_results.csv</td><td>43.71 min &rarr; 0.0838 s (99.9968% reduction)</td></tr>
+              <tr><td><strong>Financial Math Parity Check</strong></td><td class="mono">docs/06_Audit_Data_and_CSV_Matrices/analytics_dashboard_equivalence_results.csv</td><td>54/54 Checks PASS (0.0000 difference)</td></tr>
+              <tr><td><strong>ISO/IEC 25010 Test Suite</strong></td><td class="mono">docs/objective_iso_testing_evidence/</td><td>12 CSV test logs (TEST-01 to TEST-10)</td></tr>
+              <tr><td><strong>Academic Use Case Testing</strong></td><td class="mono">docs/Official Documentation/Use Case Testing/Use_Case_Testing-Shoelotskey.pdf</td><td>30-page signed test manual (48 UCT cases)</td></tr>
+              <tr><td><strong>Authoritative Pilot Database</strong></td><td class="mono">backend/db/shoelotskey_pre_historical_import_backup.db</td><td>31 digital job orders (Sept 2&ndash;16, 2026)</td></tr>
+              <tr><td><strong>Dataset B Master File</strong></td><td class="mono">backend/research_outputs/ml_final/dataset_b_10000.csv</td><td>10,000 synthetic operational orders</td></tr>
+              <tr><td><strong>RF Hyperparameter Tuning Search</strong></td><td class="mono">backend/research_outputs/ml_evaluator_evidence/rf_hyperparameter_search_evidence.json</td><td>324 grid combinations (300 trees, depth 12)</td></tr>
+              <tr><td><strong>Sealed Final Test Metrics</strong></td><td class="mono">backend/research_outputs/ml_final/dataset_b_final_test_metrics.json</td><td>Test MAE: 0.0815 d (1.96 h), R<sup>2</sup> = 0.9976</td></tr>
+              <tr><td><strong>Production Trained ML Model</strong></td><td class="mono">backend/completion_model.pkl</td><td>SHA-256: 9ce390ca5f0197fe0eef...</td></tr>
+              <tr><td><strong>Live Production Release</strong></td><td class="mono">Heroku Release v152 (Deploy 777f8efb)</td><td>PostgreSQL 17.10 (Essential-0), 1x Basic Dyno</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- REPORT FOOTER -->
+  <footer class="report-footer">
+    <div>
+      <strong>Shoelotskey Web-Based Service Management System &bull; Capstone Project 2026</strong><br>
+      Researchers: Charmaine Rose G. Angeles, Kylane C. Gravino, Melody D. Sedanto &bull; NAAP Institute of Computer Studies
+    </div>
+    <div style="text-align: right;">
+      <span>Reconciliation Date: October 13, 2026 &bull; Strict Academic Research Integrity</span><br>
+      <span style="color: var(--success); font-weight: 700;">Status: Ready for Controlled Chapter-by-Chapter Editing</span>
+    </div>
+  </footer>
+
+</div>
+
+<!-- JAVASCRIPT FOR TABLE COPYING -->
+<script>
+  function copyTable(tableId) {
+    const table = document.getElementById(tableId);
+    if (!table) return;
+
+    let tsv = '';
+    const rows = table.querySelectorAll('tr');
+    rows.forEach(row => {
+      const cols = row.querySelectorAll('th, td');
+      const rowData = [];
+      cols.forEach(col => {
+        let text = col.innerText.replace(/\r?\n|\r/g, ' ').replace(/\s+/g, ' ').trim();
+        rowData.push(text);
+      });
+      tsv += rowData.join('\t') + '\n';
+    });
+
+    navigator.clipboard.writeText(tsv).then(() => {
+      alert('Table copied to clipboard in Tab-Separated format! You can paste directly into Word or Excel.');
+    }).catch(err => {
+      console.error('Failed to copy table: ', err);
+    });
+  }
+</script>
+
+</body>
+</html>

@@ -68,6 +68,16 @@ export default function ReleaseCalendar({ onSetHeaderActionRight, user }: Releas
     return targetMidnight.getTime() < startOfToday.getTime();
   };
 
+  const isJobDelayedInShop = (job: JobOrder): boolean => {
+    const statusLower = String(job.status || '').toLowerCase().trim();
+    return isJobOverdue(job) && statusLower !== 'for-release';
+  };
+
+  const isJobUnclaimedPickup = (job: JobOrder): boolean => {
+    const statusLower = String(job.status || '').toLowerCase().trim();
+    return isJobOverdue(job) && statusLower === 'for-release';
+  };
+
   const getDaysOverdue = (job: JobOrder): number => {
     const targetDate = getJobReleaseDate(job);
     if (!targetDate || isNaN(targetDate.getTime())) return 0;
@@ -92,7 +102,7 @@ export default function ReleaseCalendar({ onSetHeaderActionRight, user }: Releas
   const [filterStatus, setFilterStatus] = useState<string>('all-active');
   const [isFilterOpen, setIsFilterOpen] = useState<boolean>(false);
 
-  const isEffectiveOverdue = isOverdueView || filterStatus === 'overdue';
+  const isEffectiveOverdue = isOverdueView || filterStatus === 'overdue' || filterStatus === 'unclaimed';
 
   const scheduledOrders = useMemo(() => {
     return orders.filter((job: JobOrder) => {
@@ -195,12 +205,14 @@ export default function ReleaseCalendar({ onSetHeaderActionRight, user }: Releas
       const matchesDate = isSameDay(targetDate, date);
       if (!matchesDate) return false;
     } else {
-      // Global overdue view strictly checks if job is overdue
+      // Global overdue view checks if job is overdue, delayed in shop, or unclaimed
       if (!isJobOverdue(job)) return false;
+      if (filterStatus === 'overdue' && !isJobDelayedInShop(job)) return false;
+      if (filterStatus === 'unclaimed' && !isJobUnclaimedPickup(job)) return false;
     }
 
     // Filter by Order Status (applied to the calendar date)
-    if (filterStatus !== 'all-active' && filterStatus !== 'overdue') {
+    if (filterStatus !== 'all-active' && filterStatus !== 'overdue' && filterStatus !== 'unclaimed') {
       const statusLower = String(job.status || '').toLowerCase().trim();
       if (statusLower !== filterStatus) {
         return false;
@@ -365,7 +377,8 @@ export default function ReleaseCalendar({ onSetHeaderActionRight, user }: Releas
                                 <SelectItem value="new-order" className="text-xs focus:bg-red-50 focus:text-red-900 cursor-pointer">New Order</SelectItem>
                                 <SelectItem value="on-going" className="text-xs focus:bg-red-50 focus:text-red-900 cursor-pointer">On-going</SelectItem>
                                 <SelectItem value="for-release" className="text-xs focus:bg-red-50 focus:text-red-900 cursor-pointer">For Release</SelectItem>
-                                <SelectItem value="overdue" className="text-xs focus:bg-red-50 focus:text-red-900 cursor-pointer">Overdue</SelectItem>
+                                <SelectItem value="overdue" className="text-xs focus:bg-red-50 focus:text-red-900 cursor-pointer">Overdue (In Shop)</SelectItem>
+                                <SelectItem value="unclaimed" className="text-xs focus:bg-amber-50 focus:text-amber-900 cursor-pointer">Unclaimed (Ready for Pickup)</SelectItem>
                               </SelectContent>
                             </Select>
                           </div>
@@ -527,10 +540,20 @@ export default function ReleaseCalendar({ onSetHeaderActionRight, user }: Releas
                   <>
                     <h3 className="text-xs sm:text-sm md:text-base font-black text-rose-600 uppercase tracking-tight flex items-center justify-center gap-1.5 sm:gap-2 truncate max-w-full">
                       <AlertTriangle className="h-4 w-4 sm:h-5 sm:w-5 stroke-[2.5] text-rose-600 shrink-0" />
-                      <span className="truncate">OVERDUE / DELAYED RELEASES</span>
+                      <span className="truncate">
+                        {filterStatus === 'unclaimed'
+                          ? 'UNCLAIMED RELEASES (AWAITING PICKUP)'
+                          : filterStatus === 'overdue'
+                          ? 'OVERDUE IN-SHOP SERVICES'
+                          : 'OVERDUE & UNCLAIMED RELEASES'}
+                      </span>
                     </h3>
                     <p className="text-xs font-bold text-gray-600 uppercase tracking-widest truncate max-w-full">
-                      Orders past their promised release date
+                      {filterStatus === 'unclaimed'
+                        ? 'Completed orders awaiting customer collection'
+                        : filterStatus === 'overdue'
+                        ? 'Orders still in progress past promised date'
+                        : 'Orders past promised target completion date'}
                     </p>
                   </>
                 ) : (
@@ -583,6 +606,8 @@ export default function ReleaseCalendar({ onSetHeaderActionRight, user }: Releas
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-3 gap-2.5 align-start content-start">
                   {paginatedJobs.map(job => {
                     const isOverdue = isJobOverdue(job);
+                    const isDelayedInShop = isJobDelayedInShop(job);
+                    const isUnclaimed = isJobUnclaimedPickup(job);
                     const daysOverdue = getDaysOverdue(job);
                     const servicesText = Array.isArray(job.baseService)
                       ? job.baseService.map((s: string) => s.replace(' (with basic cleaning)', '')).join(', ')
@@ -633,9 +658,11 @@ export default function ReleaseCalendar({ onSetHeaderActionRight, user }: Releas
                     <div
                       key={job.id}
                       className={`group border rounded-xl p-2 sm:p-2.5 hover:shadow-md transition-all duration-200 bg-white relative overflow-hidden flex flex-col justify-between h-full min-h-[188px] sm:min-h-[192px] xl:min-h-[196px] ring-1 ring-transparent cursor-pointer ${
-                        isOverdue 
+                        isDelayedInShop 
                           ? 'border-rose-200 hover:border-rose-400 hover:ring-rose-50' 
-                          : 'border-blue-200 hover:border-blue-400 hover:ring-blue-50'
+                          : isUnclaimed
+                            ? 'border-amber-200 hover:border-amber-400 hover:ring-amber-50'
+                            : 'border-blue-200 hover:border-blue-400 hover:ring-blue-50'
                       }`}
                       onClick={() => setSelectedOrder(job)}
                     >
@@ -667,16 +694,22 @@ export default function ReleaseCalendar({ onSetHeaderActionRight, user }: Releas
                             </span>
                           </div>
 
-                          {/* Contact Number on Left + Overdue Badge on Right */}
+                          {/* Contact Number on Left + Overdue/Unclaimed Badge on Right */}
                           {(Boolean(job.contactNumber && job.contactNumber !== '-') || isOverdue) && (
                             <div className="flex items-center justify-between gap-1.5 min-w-0 text-[10px] pl-[18px] -mt-0.5">
                               <span className="text-gray-500 font-medium tracking-tight truncate" title={job.contactNumber || ''}>
                                 {job.contactNumber && job.contactNumber !== '-' ? job.contactNumber : ''}
                               </span>
-                              {isOverdue && (
-                                <span className="px-1.5 py-0.5 rounded-full text-[9px] font-bold uppercase tracking-wider border shrink-0 bg-rose-50 text-rose-700 border-rose-200 flex items-center gap-1 shadow-2xs ml-auto">
+                              {isDelayedInShop && (
+                                <span className="px-1.5 py-0.5 rounded-full text-[9px] font-bold uppercase tracking-wider border shrink-0 bg-rose-50 text-rose-700 border-rose-200 flex items-center gap-1 shadow-2xs ml-auto" title="Service in-progress past target completion date">
                                   <AlertCircle size={9} className="shrink-0 text-rose-600" />
                                   Overdue ({daysOverdue}d)
+                                </span>
+                              )}
+                              {isUnclaimed && (
+                                <span className="px-1.5 py-0.5 rounded-full text-[9px] font-bold uppercase tracking-wider border shrink-0 bg-amber-50 text-amber-700 border-amber-200 flex items-center gap-1 shadow-2xs ml-auto" title="Service complete, awaiting customer pickup">
+                                  <AlertCircle size={9} className="shrink-0 text-amber-600" />
+                                  Unclaimed ({daysOverdue}d)
                                 </span>
                               )}
                             </div>
@@ -693,13 +726,15 @@ export default function ReleaseCalendar({ onSetHeaderActionRight, user }: Releas
                               </div>
                             )}
 
-                            {/* Expected Date (outlined in red if overdue, blue if normal) */}
+                            {/* Expected Date (outlined in rose if in-shop overdue, amber if unclaimed, blue if normal) */}
                             <div className={`flex items-center gap-1.5 text-[10px] sm:text-[10.5px] rounded-md px-2 py-0.5 border ${
-                              isOverdue 
+                              isDelayedInShop 
                                 ? 'text-rose-800 bg-rose-50/80 border-rose-300' 
-                                : 'text-blue-800 bg-blue-50/70 border-blue-200'
+                                : isUnclaimed
+                                  ? 'text-amber-800 bg-amber-50/80 border-amber-300'
+                                  : 'text-blue-800 bg-blue-50/70 border-blue-200'
                             }`}>
-                              <Clock size={11} className={isOverdue ? 'text-rose-600 shrink-0' : 'text-blue-600 shrink-0'} />
+                              <Clock size={11} className={isDelayedInShop ? 'text-rose-600 shrink-0' : isUnclaimed ? 'text-amber-600 shrink-0' : 'text-blue-600 shrink-0'} />
                               <span className="font-bold truncate">
                                 Expected: <span className="font-bold">{expectedDisplay || 'Standard Release'}</span>
                               </span>

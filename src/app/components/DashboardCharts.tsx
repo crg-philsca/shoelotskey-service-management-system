@@ -177,7 +177,7 @@ export default function DashboardCharts({
               />
               <Tooltip content={<TrendTooltip />} />
               <Line
-                type="monotone"
+                type="linear"
                 dataKey="newOrders"
                 stroke="#A78BFA"
                 strokeWidth={2.5}
@@ -185,7 +185,7 @@ export default function DashboardCharts({
                 activeDot={{ r: 5 }}
               />
               <Line
-                type="monotone"
+                type="linear"
                 dataKey="releasedOrders"
                 stroke="#F97316"
                 strokeWidth={2.5}

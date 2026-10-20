@@ -23,7 +23,7 @@ import { CUSTOM_OPTION_KEYS, seedCustomOptionsFromOrders, saveStoredCustomOption
 import { useInventory } from '../context/InventoryContext';
 import { getInventoryPresentation } from '@/app/lib/inventoryPresentation';
 import { API_BASE } from '@/app/lib/apiBase';
-import { isAddonVisibleForBaseServices, applyColorCountExclusive, syncColorRenewalAddons, syncFullReglueAddons, shoeHasBothColorCounts, isColorCountAddon, isFullReglueSoleAddon, getApplicableRushFee, TWO_COLORS, THREE_COLORS } from '@/app/lib/serviceCompatibility';
+import { isAddonVisibleForBaseServices, applyColorCountExclusive, syncColorRenewalAddons, syncFullReglueAddons, shoeHasBothColorCounts, isColorCountAddon, isFullReglueSoleAddon, getApplicableRushFee, validateColorRenewalSelection, validateFullReglueSelection, getSoleAddonPricingDisplay, sortAddonsForDisplay, TWO_COLORS, THREE_COLORS } from '@/app/lib/serviceCompatibility';
 import { nextOrderId } from '@/app/lib/orderNumber';
 import { calculateOfficialReleaseBreakdown } from '@/app/lib/businessRules';
 import { validateCustomerName, CUSTOMER_NAME_MAX_LENGTH, validateSecurityInput, stripCyberAttackInput } from '@/app/lib/customerValidation';
@@ -1816,45 +1816,30 @@ export default function JobOrderFormComponent({ user, onSuccess, onCancel, initi
             return;
         }
 
-        // Color Renewal specification validation: requires 2 Colors or 3 Colors, never both
-        const shoeMissingColorCount = shoes.find(shoe => {
-            const base = shoe.baseService || [];
-            if (base.includes('Color Renewal')) {
-                const addOns = shoe.addOns || [];
-                const has2 = addOns.some(a => a.name === TWO_COLORS);
-                const has3 = addOns.some(a => a.name === THREE_COLORS);
-                return !has2 && !has3;
+        // Color Renewal specification validation: requires exactly 2 Colors or 3 Colors, never both
+        for (let i = 0; i < shoes.length; i++) {
+            const shoe = shoes[i];
+            const crValidation = validateColorRenewalSelection(shoe.baseService || [], shoe.addOns || []);
+            if (!crValidation.isValid) {
+                const itemLabel = shoe.brand ? `Shoe #${i + 1} (${shoe.brand})` : `Shoe #${i + 1}`;
+                toast.error(`${itemLabel}: ${crValidation.error}`);
+                setIsSubmitting(false);
+                isSubmittingRef.current = false;
+                return;
             }
-            return false;
-        });
-        if (shoeMissingColorCount) {
-            toast.error('Color Renewal requires specifying the color option (2 Colors or 3 Colors).');
-            setIsSubmitting(false);
-            isSubmittingRef.current = false;
-            return;
-        }
-
-        if (shoes.some((shoe) => shoeHasBothColorCounts(shoe.addOns || []))) {
-            toast.error('Color Renewal can use either 2 Colors or 3 Colors, not both.');
-            setIsSubmitting(false);
-            isSubmittingRef.current = false;
-            return;
         }
 
         // Full Reglue specification validation: requires at least one sole section (Midsole, Undersole, or both)
-        const shoeMissingFullReglueSpec = shoes.find(shoe => {
-            const base = shoe.baseService || [];
-            if (base.includes('Full Reglue')) {
-                const addOns = shoe.addOns || [];
-                return !addOns.some(a => isFullReglueSoleAddon(a.name));
+        for (let i = 0; i < shoes.length; i++) {
+            const shoe = shoes[i];
+            const frValidation = validateFullReglueSelection(shoe.baseService || [], shoe.addOns || []);
+            if (!frValidation.isValid) {
+                const itemLabel = shoe.brand ? `Shoe #${i + 1} (${shoe.brand})` : `Shoe #${i + 1}`;
+                toast.error(`${itemLabel}: ${frValidation.error}`);
+                setIsSubmitting(false);
+                isSubmittingRef.current = false;
+                return;
             }
-            return false;
-        });
-        if (shoeMissingFullReglueSpec) {
-            toast.error('Full Reglue requires specifying the reglue section (Midsole, Undersole, or both).');
-            setIsSubmitting(false);
-            isSubmittingRef.current = false;
-            return;
         }
 
         if (paymentMethod === 'gcash') {
@@ -2667,7 +2652,20 @@ export default function JobOrderFormComponent({ user, onSuccess, onCancel, initi
                                                             id={`shoeBrand-${shoe.id}`}
                                                             options={SHOE_BRANDS}
                                                             value={shoe.brand}
-                                                            onChange={(val) => updateShoe(shoe.id, { brand: val })}
+                                                            onChange={(val) => {
+                                                                const updates: Partial<ShoeEntry> = { brand: val };
+                                                                if (val && shoe.shoeModel) {
+                                                                    const modelBrand = MODEL_TO_BRAND[shoe.shoeModel];
+                                                                    if (modelBrand && modelBrand !== val) {
+                                                                        updates.shoeModel = '';
+                                                                        updates.shoeMaterial = '';
+                                                                    } else if (BRAND_MODELS[val] && !BRAND_MODELS[val].includes(shoe.shoeModel)) {
+                                                                        updates.shoeModel = '';
+                                                                        updates.shoeMaterial = '';
+                                                                    }
+                                                                }
+                                                                updateShoe(shoe.id, updates);
+                                                            }}
                                                             placeholder="Select or type Brand"
                                                             searchPlaceholder="Type custom brand..."
                                                             storageKey={CUSTOM_OPTION_KEYS.BRANDS}
@@ -2711,7 +2709,7 @@ export default function JobOrderFormComponent({ user, onSuccess, onCancel, initi
                                                             }}
                                                             placeholder="Select or type Model"
                                                             searchPlaceholder="Type model (e.g. Air Force 1)..."
-                                                            storageKey={CUSTOM_OPTION_KEYS.MODELS}
+                                                            storageKey={shoe.brand ? `${CUSTOM_OPTION_KEYS.MODELS}_${shoe.brand}` : CUSTOM_OPTION_KEYS.MODELS}
                                                         />
                                                         {shoe.shoeModel === 'Other' && (
                                                             <Input
@@ -3108,8 +3106,8 @@ export default function JobOrderFormComponent({ user, onSuccess, onCancel, initi
                                                                      return (
                                                                          <label
                                                                              key={service.id}
-                                                                             title={isServiceDisabled ? "No configured Rush Fee is applicable to this base service" : service.name}
-                                                                             className={`flex ${isChecked ? 'items-start' : 'items-center'} space-x-2 p-2.5 rounded-lg border transition-all shadow-sm ${
+                                                                            title={isServiceDisabled ? "No configured Rush Fee is applicable to this base service" : (service.name === 'Full Reglue' ? "Full Reglue (₱250.00) - Select Midsole or Undersole" : service.name === 'Color Renewal' ? "Color Renewal (Price varies) - Select 2 Colors or 3 Colors" : service.name)}
+                                                                             className={`flex ${isChecked ? 'items-start min-h-[64px]' : 'items-center min-h-[58px]'} space-x-2 p-2.5 rounded-lg border transition-all shadow-sm ${
                                                                                  isServiceDisabled
                                                                                      ? 'opacity-40 cursor-not-allowed bg-gray-50/80 border-gray-200'
                                                                                      : isChecked
@@ -3170,11 +3168,26 @@ export default function JobOrderFormComponent({ user, onSuccess, onCancel, initi
                                                                                              </span>
                                                                                          )}
                                                                                      </div>
-                                                                                     <div className="flex items-center justify-end mt-1 min-w-0">
-                                                                                         <span className="text-[11px] font-black text-red-600 shrink-0 ml-auto">{formatPeso(service.price)}</span>
-                                                                                     </div>
-                                                                                 </div>
-                                                                             ) : (
+                                                                                     {service.name === 'Full Reglue' ? (
+                                                                                          <div className="mt-0.5 min-w-0">
+                                                                                              <span className="text-[8.5px] font-semibold text-amber-700 leading-tight block break-words" title="Select Midsole or Undersole">
+                                                                                                  Select Midsole or Undersole
+                                                                                              </span>
+                                                                                          </div>
+                                                                                      ) : service.name === 'Color Renewal' ? (
+                                                                                          <div className="mt-0.5 min-w-0">
+                                                                                              <span className="text-[8.5px] font-semibold text-amber-700 leading-tight block break-words" title="Select 2 Colors or 3 Colors">
+                                                                                                  Select 2 Colors or 3 Colors
+                                                                                              </span>
+                                                                                          </div>
+                                                                                      ) : null}
+                                                                                      <div className="flex items-center justify-end mt-1 min-w-0">
+                                                                                          <span className="text-[11px] font-black text-red-600 shrink-0 ml-auto whitespace-nowrap">
+                                                                                              {service.price > 0 ? formatPeso(service.price) : 'Price varies'}
+                                                                                          </span>
+                                                                                      </div>
+                                                                                  </div>
+                                                                              ) : (
                                                                                  <div className="flex items-center justify-between gap-1.5 min-w-0 flex-1 overflow-hidden">
                                                                                      <span className="text-[11px] font-bold leading-tight text-gray-700 whitespace-nowrap truncate min-w-0" title={service.name}>
                                                                                          {service.name}
@@ -3224,18 +3237,18 @@ export default function JobOrderFormComponent({ user, onSuccess, onCancel, initi
                                                             }
 
                                                             return (
-                                                                <div className="max-h-[160px] overflow-y-auto pr-1 custom-scrollbar">
+                                                                <div className="max-h-[114px] overflow-y-auto pr-1.5 addon-scrollbar">
                                                                     <div className="grid grid-cols-2 gap-2">
-                                                                    {addOnServices
-                                                                        .filter(addon => isAddonVisibleForBaseServices(addon.name, shoe.baseService || [], services))
-                                                                        .sort((a, b) => (Number(a.sortOrder) || 999) - (Number(b.sortOrder) || 999))
-                                                                        .map((addon) => {
+                                                                    {sortAddonsForDisplay(
+                                                                        addOnServices.filter(addon => isAddonVisibleForBaseServices(addon.name, shoe.baseService || [], services)),
+                                                                        shoe.baseService || []
+                                                                    ).map((addon) => {
                                                                         const isChecked = shoe.addOns.some(a => a.name === addon.name);
                                                                         const addonItem = shoe.addOns.find(a => a.name === addon.name);
                                                                         const quantity = addonItem?.quantity || 1;
                                                                         const showSpinner = Boolean(addon.hasSpinner ?? ((addon.name || '').toLowerCase() === 'unyellowing' || (addon.name || '').toLowerCase() === 'white paint'));
                                                                         return (
-                                                                            <div key={addon.id} className={`p-2 rounded-lg border bg-white transition-all ${isChecked ? 'border-red-100 bg-red-50/10' : 'border-gray-50'}`}>
+                                                                            <div key={addon.id} className={`px-2 py-1.5 rounded-lg border bg-white transition-all h-[52px] flex flex-col justify-center ${isChecked ? 'border-red-100 bg-red-50/10' : 'border-gray-50'}`}>
                                                                                 {isChecked ? (
                                                                                     <div className="flex items-start space-x-2 min-w-0 w-full">
                                                                                         <Checkbox
@@ -3299,7 +3312,7 @@ export default function JobOrderFormComponent({ user, onSuccess, onCancel, initi
                                                                                                     </span>
                                                                                                 )}
                                                                                             </div>
-                                                                                            <div className="flex items-center justify-between gap-2 mt-1.5 min-w-0">
+                                                                                            <div className="flex items-center justify-between gap-2 mt-1 min-w-0">
                                                                                                 {showSpinner ? (
                                                                                                     <div className="flex items-center shrink-0">
                                                                                                         <input
@@ -3321,12 +3334,11 @@ export default function JobOrderFormComponent({ user, onSuccess, onCancel, initi
                                                                                                 {(() => {
                                                                                                     const isFR = (shoe.baseService || []).includes('Full Reglue');
                                                                                                     const isSole = isFullReglueSoleAddon(addon.name);
-                                                                                                    const soleAddons = (shoe.addOns || []).filter(a => isFullReglueSoleAddon(a.name));
-                                                                                                    const isFirstSole = soleAddons[0]?.name === addon.name;
-                                                                                                    if (isFR && isSole && (soleAddons.length === 1 || isFirstSole)) {
+                                                                                                    if (isFR && isSole) {
+                                                                                                        const solePricing = getSoleAddonPricingDisplay(addon.name, shoe.addOns || [], shoe.baseService || []);
                                                                                                         return (
                                                                                                             <span className="text-[11px] font-black text-red-600 shrink-0 ml-auto">
-                                                                                                                {formatPeso(0)}
+                                                                                                                {solePricing.displayLabel}
                                                                                                             </span>
                                                                                                         );
                                                                                                     }
