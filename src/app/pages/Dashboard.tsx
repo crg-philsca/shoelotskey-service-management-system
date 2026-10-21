@@ -605,6 +605,27 @@ function DashboardMain({ user, onSetHeaderActionRight }: DashboardProps) {
     });
   }, [orders, profitRange, customStartDate, customEndDate]);
 
+  // Fixed Annual Orders strictly for the Status Summary section (remains Annual regardless of selected timeframe)
+  const annualOrders = useMemo(() => {
+    const now = new Date();
+    return (orders || []).filter((order) => {
+      if (!order) return false;
+      return isDateInRange(orderEventDate(order), 'Annually', now);
+    });
+  }, [orders]);
+
+  // Status Summary counts strictly fixed to Annual timeframe
+  const statusSummaryCounts = useMemo(() => {
+    const list = annualOrders || [];
+    return {
+      new: list.filter(o => o.status === 'new-order').length,
+      ongoing: list.filter(o => o.status === 'on-going').length,
+      forRelease: list.filter(o => o.status === 'for-release').length,
+      claimed: list.filter(o => o.status === 'claimed').length,
+      cancelled: list.filter(o => isCancelledOrder(o)).length,
+    };
+  }, [annualOrders]);
+
   // Status counts strictly derived from the selected timeframe filter (analyticsOrders)
   const statusCounts = useMemo(() => {
     const list = analyticsOrders || [];
@@ -1013,7 +1034,7 @@ function DashboardMain({ user, onSetHeaderActionRight }: DashboardProps) {
                 <Card
                   role="button"
                   tabIndex={0}
-                  aria-label={`New Order ${statusCounts.new}`}
+                  aria-label={`New Order ${statusSummaryCounts.new}`}
                   className={`border-none shadow-md bg-gradient-to-br from-purple-50 to-purple-100 overflow-hidden relative cursor-pointer transition-all ${selectedStatus === 'new-order' ? 'ring-2 ring-purple-600' : ''}`}
                   onClick={() => handleStatusCardClick('new-order')}
                   onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); handleStatusCardClick('new-order'); } }}
@@ -1023,14 +1044,14 @@ function DashboardMain({ user, onSetHeaderActionRight }: DashboardProps) {
                   </div>
                   <CardContent className="pt-5 pb-1 px-3">
                     <p className="text-xs font-black uppercase tracking-widest text-gray-600 leading-none mb-1">New Order</p>
-                    <p className="text-3xl font-black text-purple-600 tracking-tight leading-none">{statusCounts.new}</p>
+                    <p className="text-3xl font-black text-purple-600 tracking-tight leading-none">{statusSummaryCounts.new}</p>
                   </CardContent>
                 </Card>
                 {/* On-Going */}
                 <Card
                   role="button"
                   tabIndex={0}
-                  aria-label={`On-Going ${statusCounts.ongoing}`}
+                  aria-label={`On-Going ${statusSummaryCounts.ongoing}`}
                   className={`border-none shadow-md bg-gradient-to-br from-blue-50 to-blue-100 overflow-hidden relative cursor-pointer transition-all ${selectedStatus === 'on-going' ? 'ring-2 ring-blue-600' : ''}`}
                   onClick={() => handleStatusCardClick('on-going')}
                   onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); handleStatusCardClick('on-going'); } }}
@@ -1040,14 +1061,14 @@ function DashboardMain({ user, onSetHeaderActionRight }: DashboardProps) {
                   </div>
                   <CardContent className="pt-5 pb-1 px-3">
                     <p className="text-xs font-black uppercase tracking-widest text-gray-600 leading-none mb-1">On-Going</p>
-                    <p className="text-3xl font-black text-blue-600 tracking-tight leading-none">{statusCounts.ongoing}</p>
+                    <p className="text-3xl font-black text-blue-600 tracking-tight leading-none">{statusSummaryCounts.ongoing}</p>
                   </CardContent>
                 </Card>
                 {/* For Release */}
                 <Card
                   role="button"
                   tabIndex={0}
-                  aria-label={`For Release ${statusCounts.forRelease}`}
+                  aria-label={`For Release ${statusSummaryCounts.forRelease}`}
                   className={`border-none shadow-md bg-gradient-to-br from-orange-50 to-orange-100 overflow-hidden relative cursor-pointer transition-all ${selectedStatus === 'for-release' ? 'ring-2 ring-orange-600' : ''}`}
                   onClick={() => handleStatusCardClick('for-release')}
                   onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); handleStatusCardClick('for-release'); } }}
@@ -1057,14 +1078,14 @@ function DashboardMain({ user, onSetHeaderActionRight }: DashboardProps) {
                   </div>
                   <CardContent className="pt-5 pb-1 px-3">
                     <p className="text-xs font-black uppercase tracking-widest text-gray-600 leading-none mb-1">For Release</p>
-                    <p className="text-3xl font-black text-orange-600 tracking-tight leading-none">{statusCounts.forRelease}</p>
+                    <p className="text-3xl font-black text-orange-600 tracking-tight leading-none">{statusSummaryCounts.forRelease}</p>
                   </CardContent>
                 </Card>
                 {/* Claimed */}
                 <Card
                   role="button"
                   tabIndex={0}
-                  aria-label={`Claimed ${statusCounts.claimed}`}
+                  aria-label={`Claimed ${statusSummaryCounts.claimed}`}
                   className={`border-none shadow-md bg-gradient-to-br from-gray-50 to-gray-100 overflow-hidden relative cursor-pointer transition-all ${selectedStatus === 'claimed' ? 'ring-2 ring-gray-600' : ''}`}
                   onClick={() => handleStatusCardClick('claimed')}
                   onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); handleStatusCardClick('claimed'); } }}
@@ -1074,7 +1095,7 @@ function DashboardMain({ user, onSetHeaderActionRight }: DashboardProps) {
                   </div>
                   <CardContent className="pt-5 pb-1 px-3">
                     <p className="text-xs font-black uppercase tracking-widest text-gray-600 leading-none mb-1">Claimed</p>
-                    <p className="text-3xl font-black text-gray-600 tracking-tight leading-none">{statusCounts.claimed}</p>
+                    <p className="text-3xl font-black text-gray-600 tracking-tight leading-none">{statusSummaryCounts.claimed}</p>
                   </CardContent>
                 </Card>
               </div>
@@ -1171,7 +1192,7 @@ function DashboardMain({ user, onSetHeaderActionRight }: DashboardProps) {
                     <Card 
                       role={isStaff ? undefined : "button"}
                       tabIndex={isStaff ? undefined : 0}
-                      aria-label={isStaff ? undefined : `Active Orders ${statusCounts.new + statusCounts.ongoing + statusCounts.forRelease}`}
+                      aria-label={isStaff ? undefined : `${profitRange === 'Annually' ? 'Annual' : profitRange} Active Orders ${statusCounts.new + statusCounts.ongoing + statusCounts.forRelease}`}
                       onClick={isStaff ? undefined : () => navigate('/total-orders', { state: { dateRange: profitRange, customStartDate, customEndDate, filterCard: 'active' } })}
                       onKeyDown={isStaff ? undefined : (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); navigate('/total-orders', { state: { dateRange: profitRange, customStartDate, customEndDate, filterCard: 'active' } }); } }}
                       className={`border-none shadow-md bg-white overflow-hidden relative ${isStaff ? 'col-span-1 md:col-span-2 cursor-default select-none pointer-events-none' : 'col-span-1 cursor-pointer hover:shadow-lg transition-all'}`}
@@ -1180,7 +1201,7 @@ function DashboardMain({ user, onSetHeaderActionRight }: DashboardProps) {
                         <FileText size={42} className="text-yellow-600" />
                       </div>
                       <CardContent className="pt-4 pb-3 px-4">
-                        <p className="text-xs font-black uppercase tracking-widest text-gray-600 mb-1.5">Active Orders</p>
+                        <p className="text-xs font-black uppercase tracking-widest text-gray-600 mb-1.5">{profitRange === 'Annually' ? 'Annual' : profitRange} Active Orders</p>
                         <p className="text-2xl font-black text-yellow-600 tracking-tight">{statusCounts.new + statusCounts.ongoing + statusCounts.forRelease}</p>
                       </CardContent>
                     </Card>
