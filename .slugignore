@@ -34,6 +34,12 @@ backend/.env
 # OCR ETL dumps / reports not needed to serve the SPA or API
 backend/historical_data/output/
 backend/historical_data/archive/
+backend/historical_data/backups/
+backend/historical_data/source/**/Photos/
+backend/historical_data/source/**/TAM*/
+backend/historical_data/source/**/*.jpeg
+backend/historical_data/source/**/*.jpg
+backend/historical_data/source/**/*.png
 backend/_tmp_*.py
 
 # Local tooling
