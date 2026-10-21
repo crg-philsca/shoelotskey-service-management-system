@@ -2523,7 +2523,7 @@ export default function JobOrderFormComponent({ user, onSuccess, onCancel, initi
                         {shippingPreference === 'pickup' && (
                             <div className="col-span-1 md:col-span-1">
                                 <Label htmlFor="shippingPref" className={LABEL_STYLE}>Shipping Preference</Label>
-                                <Select value={shippingPreference} onValueChange={(value: ShippingPreference) => setShippingPreference(value)}>
+                                <Select name="shippingPreference" value={shippingPreference} onValueChange={(value: ShippingPreference) => setShippingPreference(value)}>
                                     <SelectTrigger id="shippingPref" aria-label="Shipping Preference" className={INPUT_STYLE}>
                                         <SelectValue />
                                     </SelectTrigger>
@@ -2542,7 +2542,7 @@ export default function JobOrderFormComponent({ user, onSuccess, onCancel, initi
                             <div className="grid grid-cols-2 gap-2.5 sm:gap-4">
                                 <div className="col-span-1">
                                     <Label htmlFor="shippingPref" className={LABEL_STYLE}>Shipping Preference</Label>
-                                    <Select value={shippingPreference} onValueChange={(value: ShippingPreference) => setShippingPreference(value)}>
+                                    <Select name="shippingPreference" value={shippingPreference} onValueChange={(value: ShippingPreference) => setShippingPreference(value)}>
                                         <SelectTrigger id="shippingPref" aria-label="Shipping Preference" className={INPUT_STYLE}>
                                             <SelectValue />
                                         </SelectTrigger>
@@ -2821,6 +2821,7 @@ export default function JobOrderFormComponent({ user, onSuccess, onCancel, initi
                                                         </div>
                                                         <div className="relative group/select">
                                                             <Select
+                                                                name={`priorityLevel-${shoe.id}`}
                                                                 value={shoe.priorityLevel || 'regular'}
                                                                 onValueChange={(val: Priority) => {
                                                                     if (val === 'rush') {
@@ -3816,6 +3817,7 @@ export default function JobOrderFormComponent({ user, onSuccess, onCancel, initi
                                             <div className="space-y-1 col-span-2 md:col-span-4">
                                                 <Label htmlFor="paymentStatus" className={LABEL_STYLE}>Payment Status</Label>
                                                 <Select
+                                                    name="paymentStatus"
                                                     value={paymentStatus}
                                                     onValueChange={(value: PaymentStatus) => {
                                                         setPaymentStatus(value);
@@ -3840,7 +3842,7 @@ export default function JobOrderFormComponent({ user, onSuccess, onCancel, initi
                                             <div className={`space-y-1 ${!['gcash', 'maya'].includes(paymentMethod) ? 'sm:col-span-2' : ''}`}>
                                                 <Label htmlFor="paymentMethod" className={LABEL_STYLE}>Payment Method</Label>
                                                 <div className="relative group/select">
-                                                    <Select value={paymentMethod} onValueChange={(value: PaymentMethod) => setPaymentMethod(value)}>
+                                                    <Select name="paymentMethod" value={paymentMethod} onValueChange={(value: PaymentMethod) => setPaymentMethod(value)}>
                                                         <SelectTrigger id="paymentMethod" aria-label="Payment Method" className="bg-white border-gray-100/50 h-9 rounded-xl text-xs shadow-sm px-3 w-full pr-4 transition-all hover:border-red-200">
                                                             <SelectValue />
                                                         </SelectTrigger>
@@ -4326,6 +4328,7 @@ export default function JobOrderFormComponent({ user, onSuccess, onCancel, initi
                                                         <div className="mt-2.5 p-2.5 bg-red-50/40 border border-red-200 rounded-xl space-y-2">
                                                             <div className="flex items-center gap-2">
                                                                 <Select
+                                                                    name="customDiscountType"
                                                                     value={customDiscountType}
                                                                     onValueChange={(val: 'percent' | 'amount') => {
                                                                         setCustomDiscountType(val);

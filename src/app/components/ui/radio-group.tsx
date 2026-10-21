@@ -8,11 +8,17 @@ import { cn } from "./utils";
 
 function RadioGroup({
   className,
+  name,
   ...props
 }: React.ComponentProps<typeof RadioGroupPrimitive.Root>) {
+  const generatedId = React.useId();
+  const cleanGeneratedId = "radgrp-" + generatedId.replace(/:/g, "");
+  const effectiveName = name || cleanGeneratedId;
+
   return (
     <RadioGroupPrimitive.Root
       data-slot="radio-group"
+      name={effectiveName}
       className={cn("grid gap-3", className)}
       {...props}
     />
