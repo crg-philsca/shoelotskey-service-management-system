@@ -421,7 +421,28 @@ export default function ActivityHistory({ user }: { user: { token: string; role?
         return (t.includes('LOGIN') || t.includes('LOGGED IN')) && !t.includes('FAILED');
     };
 
-    const getAffectedRecordLabel = (activity: ActivityLog) => {
+    const getAffectedRecordLabel = (activity: ActivityLog): string => {
+        const sanitizeLabel = (raw: any): string => {
+            if (raw == null || raw === '') return '';
+            const str = String(raw).trim();
+            if (str.startsWith('{') || str.startsWith('[')) {
+                try {
+                    const parsed = JSON.parse(str);
+                    if (parsed && typeof parsed === 'object') {
+                        if (parsed.name) return String(parsed.name);
+                        if (parsed.service_name) return String(parsed.service_name);
+                        if (parsed.item_name) return String(parsed.item_name);
+                        if (parsed.order_number) return String(parsed.order_number);
+                        if (parsed.discountType) {
+                            return parsed.discountType === 'percent' ? 'Percentage Discount' : 'Fixed Amount Discount';
+                        }
+                    }
+                } catch (_) {}
+                return '';
+            }
+            return str;
+        };
+
         // Priority 1: Direct target user from payload (Permission changes, User edits)
         const targetU = 
             activity.newValues?.target_user ||
@@ -433,10 +454,11 @@ export default function ActivityHistory({ user }: { user: { token: string; role?
         const actionRaw = (activity.actionRaw || '').toUpperCase();
         const action = (activity.action || '').toUpperCase();
         const title = getBusinessActionTitle(activity).toUpperCase();
+        const moduleName = String(getModuleBadge(activity) || '').toUpperCase();
 
         // Priority 2: Query benchmarks / telemetry
         if (actionRaw === 'JOB_ORDER_RETRIEVED' || action === 'JOB_ORDER_RETRIEVED' || title.includes('BENCHMARK')) {
-            return activity.newValues?.order_reference || 'All Orders';
+            return String(activity.newValues?.order_reference || 'All Orders');
         }
 
         // Priority 3: Cash Register Sessions
@@ -446,16 +468,15 @@ export default function ActivityHistory({ user }: { user: { token: string; role?
 
         // Priority 4: Discount Authorizations
         if (actionRaw === 'DISCOUNT_AUTHORIZED' || title.includes('DISCOUNT')) {
-            return activity.newValues?.job_order || activity.newValues?.order_number || 'Job Order';
+            return String(activity.newValues?.job_order || activity.newValues?.order_number || 'Job Order');
         }
 
         // Priority 5: Inventory balance adjustments
         if (actionRaw === 'SET_BALANCE' || title.includes('BALANCE ADJUSTED')) {
-            return activity.newValues?.item_name || activity.oldValues?.item_name || 'Inventory Item';
+            return String(activity.newValues?.item_name || activity.oldValues?.item_name || 'Inventory Item');
         }
 
         // Priority 6: Authentication events
-        const moduleName = String(getModuleBadge(activity) || '').toUpperCase();
         const isAuth =
             moduleName === 'AUTHENTICATION' ||
             isLogoutAction(activity) ||
@@ -464,7 +485,7 @@ export default function ActivityHistory({ user }: { user: { token: string; role?
             getActionTokens(activity).includes('TIMEOUT');
 
         if (isAuth) {
-            return (
+            return String(
                 activity.oldValues?.username ||
                 activity.newValues?.username ||
                 activity.newValues?.username_attempted ||
@@ -473,32 +494,75 @@ export default function ActivityHistory({ user }: { user: { token: string; role?
             );
         }
 
-        return (
-            activity.oldValues?.username ||
-            activity.newValues?.username ||
-            activity.oldValues?.order_number ||
-            activity.newValues?.order_number ||
-            activity.oldValues?.orderNumber ||
-            activity.newValues?.orderNumber ||
-            activity.oldValues?.order_id ||
-            activity.newValues?.order_id ||
-            activity.oldValues?.item_name ||
-            activity.newValues?.item_name ||
-            activity.oldValues?.itemName ||
-            activity.newValues?.itemName ||
-            activity.oldValues?.service_name ||
+        // Priority 7: Services & Discounts
+        const isService =
+            moduleName.includes('SERVICE') ||
+            activity.table === 'services' ||
+            activity.type === 'service' ||
+            title.includes('SERVICE');
+
+        if (isService) {
+            const svcLbl = sanitizeLabel(
+                activity.newValues?.service_name ||
+                activity.oldValues?.service_name ||
+                activity.newValues?.serviceName ||
+                activity.oldValues?.serviceName ||
+                activity.newValues?.name ||
+                activity.oldValues?.name ||
+                (String(activity.newValues?.details || activity.details || '').match(/(?:service:?)\s*['"]?([^'"\n\r,]+?)['"]?/i)?.[1])
+            );
+            if (svcLbl) return svcLbl;
+        }
+
+        // Priority 8: General Entity Names (orders, inventory, users, customers, services)
+        const primaryCandidate = sanitizeLabel(
             activity.newValues?.service_name ||
-            activity.oldValues?.customer_name ||
+            activity.oldValues?.service_name ||
+            activity.newValues?.serviceName ||
+            activity.oldValues?.serviceName ||
+            activity.newValues?.item_name ||
+            activity.oldValues?.item_name ||
+            activity.newValues?.itemName ||
+            activity.oldValues?.itemName ||
+            activity.newValues?.name ||
+            activity.oldValues?.name ||
+            activity.newValues?.order_number ||
+            activity.oldValues?.order_number ||
+            activity.newValues?.orderNumber ||
+            activity.oldValues?.orderNumber ||
+            activity.newValues?.username ||
+            activity.oldValues?.username ||
             activity.newValues?.customer_name ||
-            activity.oldValues?.customerName ||
+            activity.oldValues?.customer_name ||
             activity.newValues?.customerName ||
-            activity.oldValues?.description ||
-            activity.newValues?.description ||
-            (String(activity.newValues?.details || activity.details || '').match(/(?:for order:?|item:?)\s*['"]?([^'"]+?)['"]?(?:\s*\(|\s*:|\s*updated|\s*$)/i)?.[1]) ||
-            (String(activity.newValues?.details || activity.details || '').match(/(?:account for)\s+([A-Za-z0-9_.-]+)/i)?.[1]) ||
-            activity.recordId ||
-            'N/A'
+            activity.oldValues?.customerName ||
+            activity.newValues?.title ||
+            activity.oldValues?.title
         );
+        if (primaryCandidate) return primaryCandidate;
+
+        // Priority 9: Extract from human log details string
+        const detailsStr = String(activity.newValues?.details || activity.details || '');
+        const detailsMatch =
+            detailsStr.match(/(?:Updated|Created|Deleted|Added|Removed)\s+(?:service|item|expense|customer|order|user):\s*['"]?([^'"\n\r,]+?)['"]?/i)?.[1] ||
+            detailsStr.match(/(?:for order:?|item:?|service:?|expense:?|user:?)\s*['"]?([^'"\n\r,]+?)['"]?(?:\s*\(|\s*:|\s*updated|\s*$)/i)?.[1] ||
+            detailsStr.match(/(?:account for)\s+([A-Za-z0-9_.-]+)/i)?.[1];
+        if (detailsMatch) {
+            const sanitizedMatch = sanitizeLabel(detailsMatch);
+            if (sanitizedMatch) return sanitizedMatch;
+        }
+
+        // Priority 10: Humanized record ID fallback
+        if (activity.recordId) {
+            const rawRec = String(activity.recordId);
+            if (!rawRec.startsWith('{') && !rawRec.startsWith('[')) {
+                if (isService) return `Service #${rawRec}`;
+                if (moduleName.includes('INVENTORY') || activity.table === 'inventory') return `Item #${rawRec}`;
+                return rawRec;
+            }
+        }
+
+        return 'N/A';
     };
 
     const getActionIcon = (title: string) => {
@@ -772,11 +836,25 @@ export default function ActivityHistory({ user }: { user: { token: string; role?
         const actionStr = getBusinessActionTitle(log).toUpperCase();
         const module = getModuleBadge(log).toUpperCase();
         
-        const ignoredKeys = new Set(['id', 'order_id', 'item_id', 'user_id', 'customer_id', 'created_at', 'updated_at', 'history', 'items', 'inventory_used', 'inventoryused', '_id', 'token', 'password', 'ordernumber', 'order_number', 'updater_id', 'updaterid', 'inventoryapplied', 'inventory_applied', 'last_modified', 'is_retail', 'isretail', 'sync_version', 'modifier', 'record_id', 'details', 'cancelled', 'permissions', 'added', 'removed', 'target_user', 'targetuser', 'target_username', 'restored_defaults', 'restoreddefaults', 'test_id', 'testid', 'duration_ms', 'durationms', 'result_count', 'resultcount']);
+        const ignoredKeys = new Set(['id', 'service_id', 'serviceid', 'order_id', 'item_id', 'user_id', 'customer_id', 'created_at', 'updated_at', 'history', 'items', 'inventory_used', 'inventoryused', '_id', 'token', 'password', 'ordernumber', 'order_number', 'updater_id', 'updaterid', 'inventoryapplied', 'inventory_applied', 'last_modified', 'is_retail', 'isretail', 'sync_version', 'modifier', 'record_id', 'details', 'cancelled', 'permissions', 'added', 'removed', 'target_user', 'targetuser', 'target_username', 'restored_defaults', 'restoreddefaults', 'test_id', 'testid', 'duration_ms', 'durationms', 'result_count', 'resultcount']);
 
         const mapBusinessLabel = (key: string) => {
             const lowerKey = key.toLowerCase();
             if (lowerKey === 'password_changed' || lowerKey === 'passwordchanged') return 'Password Security';
+            if (lowerKey === 'service_name' || lowerKey === 'servicename') return 'Service Name';
+            if (lowerKey === 'name') return 'Name';
+            if (lowerKey === 'base_price' || lowerKey === 'baseprice') return 'Base Price';
+            if (lowerKey === 'price') return 'Price';
+            if (lowerKey === 'category') return 'Category';
+            if (lowerKey === 'description') return 'Description / Rules';
+            if (lowerKey === 'duration_days' || lowerKey === 'durationdays') return 'Lead Time (Days)';
+            if (lowerKey === 'service_code' || lowerKey === 'servicecode') return 'Service Code';
+            if (lowerKey === 'has_spinner' || lowerKey === 'hasspinner') return 'Interactive Spinner';
+            if (lowerKey === 'requires_id' || lowerKey === 'requiresid') return 'Requires ID';
+            if (lowerKey === 'id_type' || lowerKey === 'idtype') return 'ID Type';
+            if (lowerKey === 'id_format' || lowerKey === 'idformat') return 'ID Format';
+            if (lowerKey === 'digits') return 'Required ID Digits';
+            if (lowerKey === 'discount_type' || lowerKey === 'discounttype') return 'Discount Type';
             if (lowerKey === 'updater_id' || lowerKey === 'updaterid') return 'Updated By';
             if (lowerKey === 'base_price') return 'Service Price';
             if (lowerKey === 'is_active' || lowerKey === 'status' || lowerKey === 'was_active') return 'Status';
@@ -933,12 +1011,41 @@ export default function ActivityHistory({ user }: { user: { token: string; role?
             if (lowerKey === 'role' || lowerKey === 'role_name' || lowerKey === 'rolename') {
                 return getFormattedRole(String(val));
             }
+            if (lowerKey === 'category') {
+                const sCat = String(val).toLowerCase();
+                if (sCat === 'discount') return 'Discount';
+                if (sCat === 'base') return 'Base Service';
+                if (sCat === 'addon') return 'Add-on Service';
+                if (sCat === 'priority') return 'Priority Service';
+                return humanizeReadableValue(String(val));
+            }
             if (lowerKey === 'is_active' || lowerKey === 'was_active') {
                 if (val === true || val === 'true' || val === 1) return 'Active';
                 if (val === false || val === 'false' || val === 0) return 'Inactive';
             }
             if (lowerKey === 'soft_delete') {
                 return (val === true || val === 'true') ? 'Yes (kept in database)' : 'No';
+            }
+            // Parse and humanize raw JSON strings so they don't look like database records
+            if (typeof val === 'string' && (val.trim().startsWith('{') || val.trim().startsWith('['))) {
+                try {
+                    const parsed = JSON.parse(val.trim());
+                    if (parsed && typeof parsed === 'object') {
+                        if (parsed.discountType) {
+                            const typeStr = parsed.discountType === 'fixed' ? 'Fixed Amount Discount (₱)' : 'Percentage Discount (%)';
+                            const idReqStr = parsed.requiresId ? `ID Verification Required (${parsed.idType === 'control_number' ? 'Control No.' : parsed.idType === 'id_number' ? 'ID No.' : 'Govt ID'})` : 'No ID Verification Required';
+                            return `${typeStr} • ${idReqStr}`;
+                        }
+                        const preferred =
+                            parsed.name || parsed.item_name || parsed.service_name || parsed.username ||
+                            parsed.customer_name || parsed.order_number || parsed.label || parsed.details;
+                        if (preferred != null && preferred !== '') return humanizeReadableValue(String(preferred));
+                        const parts = Object.entries(parsed)
+                            .filter(([k]) => !['id', 'password', 'token', 'service_id'].includes(String(k).toLowerCase()))
+                            .map(([k, v]) => `${mapBusinessLabel(k)}: ${mapBusinessValue(k, v)}`);
+                        if (parts.length > 0) return parts.join(' · ');
+                    }
+                } catch (_) {}
             }
             if (Array.isArray(val)) {
                 if (val.length === 0) return 'None';
@@ -1162,7 +1269,14 @@ export default function ActivityHistory({ user }: { user: { token: string; role?
                     'encoding_time', 'encoding_seconds', 'efficiency_vs_paper'
                 ],
                 'Shoe Information': ['brand', 'shoeModel', 'shoeMaterial', 'shoeSize', 'color', 'condition', 'quantity'],
-                'Service Information': ['baseService', 'addOns'],
+                'Service Information': [
+                    'name', 'service_name', 'serviceName', 'base_price', 'basePrice', 'price',
+                    'category', 'description', 'duration_days', 'durationDays', 'service_code', 'code',
+                    'has_spinner', 'hasSpinner', 'requires_id', 'requiresId', 'id_type', 'idType',
+                    'id_format', 'idFormat', 'digits', 'connected_addons', 'connectedAddons',
+                    'connected_base_services', 'connectedBaseServices', 'baseService', 'addOns',
+                    'is_active', 'isActive'
+                ],
                 'Customer Information': ['customerName', 'contactNumber'],
                 'Delivery Information': ['shippingPreference', 'deliveryAddress', 'deliveryCourier', 'releaseTime', 'province', 'city', 'barangay', 'zipCode'],
                 'Payment Information': ['grandTotal', 'amountReceived', 'balance', 'paymentMethod', 'paymentStatus', 'referenceNo', 'depositAmount']
@@ -2729,6 +2843,16 @@ export default function ActivityHistory({ user }: { user: { token: string; role?
                                             .replace(/Password Changed:\s*Yes/gi, 'Password Changed Successfully')
                                             .replace(/Password Changed:\s*\(new\)\s*No/gi, 'Password: No Change')
                                             .replace(/Password Changed:\s*No/gi, 'Password: No Change');
+                                        if (cleanDetails.trim().startsWith('{') || cleanDetails.trim().startsWith('[')) {
+                                            try {
+                                                const parsed = JSON.parse(cleanDetails.trim());
+                                                if (parsed && typeof parsed === 'object') {
+                                                    if (parsed.details) cleanDetails = String(parsed.details);
+                                                    else if (parsed.discountType) cleanDetails = `Discount rule: ${parsed.discountType === 'percent' ? 'Percentage' : 'Fixed Amount'}`;
+                                                    else cleanDetails = Object.entries(parsed).filter(([k]) => !['id', 'token', 'password'].includes(k.toLowerCase())).map(([k, v]) => `${mapBusinessLabel(k)}: ${v}`).join(' · ');
+                                                }
+                                            } catch (_) {}
+                                        }
                                         return (
                                             <div className="mt-1 pt-3 border-t border-slate-200 flex flex-col gap-1.5 min-w-0">
                                                 <span className="font-extrabold text-slate-500 uppercase text-[9px] tracking-widest flex items-center gap-1.5">

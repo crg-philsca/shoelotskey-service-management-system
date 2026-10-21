@@ -495,7 +495,10 @@ export function ServiceProvider({ children, user }: { children: ReactNode, user:
                     module: 'Services',
                     recordId: id,
                     details: `Updated service: ${data.service_name || updates.name || id}`,
-                    newValues: updates
+                    newValues: {
+                        ...updates,
+                        service_name: data.service_name || updates.name || id
+                    }
                 });
             })
             .catch(err => {
