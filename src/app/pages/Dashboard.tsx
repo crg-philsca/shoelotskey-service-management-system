@@ -1493,19 +1493,19 @@ function DashboardMain({ user, onSetHeaderActionRight }: DashboardProps) {
 
                     return (
                       <>
-                        <div className={`w-full overflow-y-auto max-h-[435px] xl:max-h-[460px] subtle-vertical-scroll pb-1 rounded-lg border border-gray-100 ${paginatedOrders.length === 0 ? 'overflow-x-hidden' : 'overflow-x-auto lg:overflow-x-hidden'}`}>
-                          <table className={`w-full text-xs table-fixed ${paginatedOrders.length === 0 ? 'min-w-full' : 'min-w-[820px] lg:min-w-full'}`}>
+                        <div className="w-full overflow-x-auto overflow-y-auto max-h-[435px] xl:max-h-[460px] subtle-vertical-scroll pb-1 rounded-lg border border-gray-100">
+                          <table className="w-full text-xs table-fixed min-w-[980px]">
                             <colgroup>
                                <col style={{ width: '12%' }} />
-                               <col style={{ width: '16%' }} />
-                               <col style={{ width: '16%' }} />
-                               <col style={{ width: '5%' }} />
+                               <col style={{ width: '13%' }} />
                                <col style={{ width: '10%' }} />
-                               <col style={{ width: '12%' }} />
-                               <col style={{ width: '7%' }} />
+                               <col style={{ width: '5%' }} />
+                               <col style={{ width: '9%' }} />
                                <col style={{ width: '11%' }} />
-                               <col style={{ width: '7%' }} />
-                               <col style={{ width: '4%' }} />
+                               <col style={{ width: '8%' }} />
+                               <col style={{ width: '15%' }} />
+                               <col style={{ width: '9%' }} />
+                               <col style={{ width: '8%' }} />
                             </colgroup>
                             <thead className="bg-red-50/95 backdrop-blur-xs border-b border-red-100 sticky top-0 z-10 shadow-xs">
                               <tr className="bg-red-50/95">
@@ -1520,7 +1520,7 @@ function DashboardMain({ user, onSetHeaderActionRight }: DashboardProps) {
                                 <th className="h-9 px-1.5 text-center font-black text-gray-700 uppercase tracking-tight text-[10.5px] whitespace-nowrap">Priority</th>
                                 <th className="h-9 px-2 text-center font-black text-gray-700 uppercase tracking-tight text-[10.5px] whitespace-nowrap">Payment</th>
                                 <th className="h-9 px-2 text-center font-black text-gray-700 uppercase tracking-tight text-[10.5px] whitespace-nowrap">Total</th>
-                                <th className="h-9 px-1.5 text-center font-black text-gray-700 uppercase tracking-tight text-[10.5px] whitespace-nowrap">Actions</th>
+                                <th className="h-9 px-2 text-center font-black text-gray-700 uppercase tracking-tight text-[10.5px] whitespace-nowrap">Actions</th>
                               </tr>
                             </thead>
                             <tbody className="divide-y divide-gray-100">
@@ -1772,7 +1772,7 @@ function DashboardMain({ user, onSetHeaderActionRight }: DashboardProps) {
                                         {'\u20B1'}{(order.grandTotal || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                                       </span>
                                     </td>
-                                    <td className="px-1 py-2.5 text-center whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
+                                    <td className="px-2 py-2.5 text-center whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
                                       {(() => {
                                         const hasRowActions = (
                                           (order.status === 'new-order' && (canUpdateOrder || canCancelOrder)) ||
@@ -1787,7 +1787,7 @@ function DashboardMain({ user, onSetHeaderActionRight }: DashboardProps) {
                                         return (
                                           <DropdownMenu>
                                             <DropdownMenuTrigger asChild>
-                                          <Button variant="outline" className="h-7 w-7 p-0 border-red-200 text-red-700 bg-red-50 hover:bg-red-100 font-bold rounded-md inline-flex items-center justify-center" title="Actions">
+                                          <Button variant="outline" className="h-7 w-7 p-0 border-red-200 text-red-700 bg-red-50 hover:bg-red-100 font-bold rounded-md inline-flex items-center justify-center mx-auto" title="Actions">
                                             <MoreVertical className="h-3.5 w-3.5 text-red-500" />
                                           </Button>
                                         </DropdownMenuTrigger>
