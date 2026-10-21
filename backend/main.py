@@ -542,7 +542,9 @@ def _human_audit_value(key: str, value) -> str:
         return "None"
     if key in ("is_active", "was_active"):
         return "Active" if value in (True, "true", 1, "1") else "Inactive"
-    if key in ("soft_delete", "password_changed", "auto_deduct", "is_retail", "inventoryApplied"):
+    if key == "password_changed":
+        return "Password Changed Successfully" if value in (True, "true", 1, "1") else "No Change"
+    if key in ("soft_delete", "auto_deduct", "is_retail", "inventoryApplied"):
         return "Yes" if value in (True, "true", 1, "1") else "No"
     if key in ("base_price", "unit_price", "retail_price", "grandTotal", "grand_total", "amount", "amountReceived", "balance", "depositAmount"):
         try:
@@ -588,16 +590,22 @@ def build_audit_change_bits(old_values: Optional[dict], new_values: Optional[dic
         if key in _AUDIT_SKIP_KEYS:
             continue
         if key not in ov:
-            if key == "password_changed" and not nv.get(key):
+            if key == "password_changed":
+                if nv.get(key) in (True, "true", 1, "1"):
+                    bits.append("Password Changed Successfully")
                 continue
             bits.append(f"{AUDIT_FIELD_LABELS.get(key, key.replace('_', ' ').title())}: (new) {_human_audit_value(key, nv.get(key))}")
         elif key not in nv:
             bits.append(f"{AUDIT_FIELD_LABELS.get(key, key.replace('_', ' ').title())}: {_human_audit_value(key, ov.get(key))} → (removed)")
         elif not _audit_values_equal(ov.get(key), nv.get(key)):
-            label = AUDIT_FIELD_LABELS.get(key, key.replace("_", " ").title())
-            bits.append(
-                f"{label}: {_human_audit_value(key, ov.get(key))} → {_human_audit_value(key, nv.get(key))}"
-            )
+            if key == "password_changed":
+                if nv.get(key) in (True, "true", 1, "1"):
+                    bits.append("Password Changed Successfully")
+            else:
+                label = AUDIT_FIELD_LABELS.get(key, key.replace("_", " ").title())
+                bits.append(
+                    f"{label}: {_human_audit_value(key, ov.get(key))} → {_human_audit_value(key, nv.get(key))}"
+                )
         if len(bits) >= limit:
             break
     return bits
@@ -7196,7 +7204,12 @@ def get_activities(
         nv = log.new_values if isinstance(log.new_values, dict) else {}
         ov = log.old_values if isinstance(log.old_values, dict) else {}
         if isinstance(nv.get("details"), str) and nv["details"].strip():
-            return nv["details"].strip()
+            det = nv["details"].strip()
+            det = det.replace("Password Changed: (new) Yes", "Password Changed Successfully")
+            det = det.replace("Password Changed: Yes", "Password Changed Successfully")
+            det = det.replace("Password Changed: (new) No", "Password: No Change")
+            det = det.replace("Password Changed: No", "Password: No Change")
+            return det
 
         target = (
             nv.get("username") or ov.get("username")
@@ -7234,6 +7247,26 @@ def get_activities(
 
     # Build base query
     q = db.query(AuditLog)
+
+    # Resolve requesting user's role
+    user_role = (getattr(getattr(current_user, "role", None), "role_name", None) or getattr(current_user, "role", None) or "").lower()
+    if not user_role and hasattr(current_user, "role_id") and current_user.role_id:
+        r = db.query(Role).filter(Role.role_id == current_user.role_id).first()
+        if r and r.role_name:
+            user_role = r.role_name.lower()
+
+    is_owner = user_role == "owner" or (getattr(current_user, "username", "") or "").lower() == "owner"
+    if is_owner:
+        # Business Owner: Hide internal developer/system telemetry and server errors
+        q = q.filter(AuditLog.action_type != "SERVER_ERROR")
+        q = q.filter(AuditLog.action_type != "JOB_ORDER_RETRIEVED")
+        q = q.filter(~AuditLog.action_type.ilike("%SERVER_ERROR%"))
+        q = q.filter(~AuditLog.action_type.ilike("%SERVER ERROR%"))
+        q = q.filter(~AuditLog.action_type.ilike("%TELEMETRY%"))
+        q = q.filter(~AuditLog.action_type.ilike("%BENCHMARK%"))
+        q = q.filter((AuditLog.table_name == None) | (AuditLog.table_name != "backend_v2"))
+        q = q.filter((AuditLog.module == None) | (~AuditLog.module.ilike("%TELEMETRY%")))
+        q = q.filter((AuditLog.module == None) | (~AuditLog.module.ilike("%BENCHMARK%")))
 
     # Apply server-side filters
     if module and module.lower() not in ("all", "all types", ""):

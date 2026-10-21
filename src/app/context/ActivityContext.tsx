@@ -32,6 +32,21 @@ function withoutResolvedPilErrors(logs: ActivityLog[]): ActivityLog[] {
     return logs.filter((log) => !isResolvedPilImportError(log));
 }
 
+function isOwnerHiddenActivity(log: ActivityLog): boolean {
+    const actionRaw = String(log.actionRaw || log.action || '').toUpperCase().replace(/\s+/g, '_');
+    if (actionRaw === 'SERVER_ERROR' || actionRaw === 'JOB_ORDER_RETRIEVED') return true;
+    if (actionRaw.includes('SERVER_ERROR') || actionRaw.includes('SERVER ERROR')) return true;
+    if (actionRaw.includes('TELEMETRY') || actionRaw.includes('BENCHMARK')) return true;
+    if (String(log.table || '').toLowerCase() === 'backend_v2') return true;
+    const mod = String(log.module || '').toUpperCase();
+    if (mod === 'SYSTEM TELEMETRY' || mod.includes('TELEMETRY') || mod.includes('BENCHMARK')) return true;
+    const act = String(log.action || '').toUpperCase();
+    if (act.includes('SERVER ERROR')) return true;
+    const det = String(log.details || '').toLowerCase();
+    if (det.startsWith('server error') || det.includes('server error during')) return true;
+    return false;
+}
+
 // P1-14 FIX: This module previously fell back to a hardcoded DEFAULT_SEED_LOGS array of
 // fabricated activity records (fake users, fake timestamps, fake order/inventory/service
 // changes) whenever the backend was unreachable or returned no rows, and rendered them in
@@ -54,13 +69,30 @@ const ActivityContext = createContext<ActivityContextType | undefined>(undefined
  * PERSISTENCE: Syncs with Backend API (/api/activities).
  * FALLBACK: Uses localStorage if backend is unreachable.
  */
-export function ActivityProvider({ children, user }: { children: ReactNode, user: { token: string } }) {
+export function ActivityProvider({ children, user }: { children: ReactNode, user: { token: string; role?: string } }) {
+    const isOwner = (() => {
+        const role = (user.role || '').toLowerCase();
+        if (role === 'owner') return true;
+        try {
+            const u = JSON.parse(localStorage.getItem('user') || '{}');
+            const r = (u.role || '').toLowerCase();
+            const uname = (u.username || '').toLowerCase();
+            return r === 'owner' || uname === 'owner';
+        } catch {
+            return false;
+        }
+    })();
+
     const [activities, setActivities] = useState<ActivityLog[]>(() => {
         try {
             const saved = typeof window !== 'undefined' ? localStorage.getItem('shoelotskey_activities') : null;
             if (saved) {
                 const parsed = JSON.parse(saved);
-                return withoutResolvedPilErrors(Array.isArray(parsed) ? parsed : []);
+                let logs = withoutResolvedPilErrors(Array.isArray(parsed) ? parsed : []);
+                if (isOwner) {
+                    logs = logs.filter((log) => !isOwnerHiddenActivity(log));
+                }
+                return logs;
             }
         } catch {}
         return [];
@@ -74,12 +106,18 @@ export function ActivityProvider({ children, user }: { children: ReactNode, user
         return r || (usr === 'owner' ? 'owner' : 'staff');
     };
 
-    const formatLogList = (logList: any[]): ActivityLog[] => withoutResolvedPilErrors(logList.map((d: any) => ({
-        ...d,
-        table: d.table || (d.type === 'service' ? 'Services' : d.type === 'inventory' ? 'Inventory' : d.type === 'expense' ? 'Expenses' : d.type === 'system' ? 'Users' : 'Orders'),
-        module: d.module || (d.type === 'service' ? 'Services' : d.type === 'inventory' ? 'Inventory' : d.type === 'expense' ? 'Expenses' : d.type === 'system' ? 'User Management' : 'Job Orders'),
-        role: normalizeRole(d.role, d.user)
-    })));
+    const formatLogList = (logList: any[]): ActivityLog[] => {
+        let logs = withoutResolvedPilErrors(logList.map((d: any) => ({
+            ...d,
+            table: d.table || (d.type === 'service' ? 'Services' : d.type === 'inventory' ? 'Inventory' : d.type === 'expense' ? 'Expenses' : d.type === 'system' ? 'Users' : 'Orders'),
+            module: d.module || (d.type === 'service' ? 'Services' : d.type === 'inventory' ? 'Inventory' : d.type === 'expense' ? 'Expenses' : d.type === 'system' ? 'User Management' : 'Job Orders'),
+            role: normalizeRole(d.role, d.user)
+        })));
+        if (isOwner) {
+            logs = logs.filter((log) => !isOwnerHiddenActivity(log));
+        }
+        return logs;
+    };
 
     const refreshActivities = useCallback(async (limit: number = 100): Promise<boolean> => {
         try {
@@ -119,7 +157,10 @@ export function ActivityProvider({ children, user }: { children: ReactNode, user
             try {
                 const saved = localStorage.getItem('shoelotskey_activities');
                 const parsed = saved ? JSON.parse(saved) : [];
-                const cleaned = withoutResolvedPilErrors(Array.isArray(parsed) ? parsed : []);
+                let cleaned = withoutResolvedPilErrors(Array.isArray(parsed) ? parsed : []);
+                if (isOwner) {
+                    cleaned = cleaned.filter((log) => !isOwnerHiddenActivity(log));
+                }
                 setActivities(cleaned);
                 localStorage.setItem('shoelotskey_activities', JSON.stringify(cleaned));
             } catch (parseErr) {
@@ -243,7 +284,10 @@ export function ActivityProvider({ children, user }: { children: ReactNode, user
     };
 
     const visibleActivities = useMemo(() => {
-        const cleaned = withoutResolvedPilErrors(activities);
+        let cleaned = withoutResolvedPilErrors(activities);
+        if (isOwner) {
+            cleaned = cleaned.filter((log) => !isOwnerHiddenActivity(log));
+        }
         const seen = new Set<string>();
         const deduped: ActivityLog[] = [];
         for (const act of cleaned) {
@@ -254,7 +298,7 @@ export function ActivityProvider({ children, user }: { children: ReactNode, user
             }
         }
         return deduped;
-    }, [activities]);
+    }, [activities, isOwner]);
     const contextValue = useMemo(
         () => ({ activities: visibleActivities, addActivity, refreshActivities }),
         [visibleActivities, addActivity, refreshActivities],

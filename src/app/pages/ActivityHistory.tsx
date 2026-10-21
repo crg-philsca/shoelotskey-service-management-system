@@ -112,8 +112,21 @@ export default function ActivityHistory({ user }: { user: { token: string; role?
         fetchUsers();
     }, [user.token, user.role]);
 
-    // Predefined Module Filter Options
-    const MODULE_OPTIONS = [
+    const isOwner = (() => {
+        const role = (user.role || '').toLowerCase();
+        if (role === 'owner') return true;
+        try {
+            const u = JSON.parse(localStorage.getItem('user') || '{}');
+            const r = (u.role || '').toLowerCase();
+            const uname = (u.username || '').toLowerCase();
+            return r === 'owner' || uname === 'owner';
+        } catch {
+            return false;
+        }
+    })();
+
+    // Predefined Module Filter Options (Owner does not see developer/benchmark telemetry)
+    const MODULE_OPTIONS = useMemo(() => [
         { label: 'ALL TYPES & MODULES', value: 'all' },
         { label: 'Dashboard', value: 'Dashboard' },
         { label: 'Job Order Form', value: 'Job Order Form' },
@@ -126,10 +139,10 @@ export default function ActivityHistory({ user }: { user: { token: string; role?
         { label: 'Cash Register', value: 'Cash Register' },
         { label: 'Expenses', value: 'Expenses' },
         { label: 'Historical Records', value: 'Historical Records' },
-        { label: 'System Telemetry (Benchmarks)', value: 'System Telemetry' },
+        ...(!isOwner ? [{ label: 'System Telemetry (Benchmarks)', value: 'System Telemetry' }] : []),
         { label: 'Machine Learning', value: 'Machine Learning' },
         { label: 'System', value: 'System' }
-    ];
+    ], [isOwner]);
 
     const getFormattedRole = (role?: string, username?: string): string => {
         const r = (role || '').toLowerCase();
@@ -578,6 +591,40 @@ export default function ActivityHistory({ user }: { user: { token: string; role?
     const filteredActivities = dedupedActivities.filter((activity: ActivityLog) => {
         const actionRaw = String(activity.actionRaw || activity.action || '').toUpperCase();
         const moduleLabel = getModuleBadge(activity).toUpperCase();
+        const actionTitle = getBusinessActionTitle(activity).toUpperCase();
+        const detailsLower = String(activity.details || '').toLowerCase();
+
+        // 1. Hide system telemetry and server errors in Owner role
+        if (isOwner) {
+            const isServerError =
+                actionRaw === 'SERVER_ERROR' ||
+                actionRaw.includes('SERVER_ERROR') ||
+                actionRaw.includes('SERVER ERROR') ||
+                actionTitle.includes('SERVER ERROR') ||
+                String(activity.action || '').toUpperCase().includes('SERVER ERROR') ||
+                String(activity.table || '').toLowerCase() === 'backend_v2' ||
+                detailsLower.startsWith('server error') ||
+                detailsLower.includes('server error during');
+
+            const isSystemTelemetry =
+                moduleLabel === 'SYSTEM TELEMETRY' ||
+                moduleLabel.includes('TELEMETRY') ||
+                moduleLabel.includes('BENCHMARK') ||
+                actionRaw === 'JOB_ORDER_RETRIEVED' ||
+                actionRaw.includes('TELEMETRY') ||
+                actionRaw.includes('BENCHMARK') ||
+                actionTitle.includes('RECORD RETRIEVED') ||
+                actionTitle.includes('BENCHMARK') ||
+                actionTitle.includes('TELEMETRY') ||
+                String(activity.module || '').toUpperCase() === 'SYSTEM TELEMETRY' ||
+                String(activity.module || '').toUpperCase().includes('TELEMETRY') ||
+                String(activity.module || '').toUpperCase().includes('BENCHMARK');
+
+            if (isServerError || isSystemTelemetry) {
+                return false;
+            }
+        }
+
         // Hide noisy routing 404s unless the user explicitly filters System or searches for them.
         const isRoutingNoise = actionRaw.includes('404') || moduleLabel === 'ROUTING';
         if (isRoutingNoise && selectedType !== 'System' && !searchTerm.trim()) {
@@ -729,6 +776,7 @@ export default function ActivityHistory({ user }: { user: { token: string; role?
 
         const mapBusinessLabel = (key: string) => {
             const lowerKey = key.toLowerCase();
+            if (lowerKey === 'password_changed' || lowerKey === 'passwordchanged') return 'Password Security';
             if (lowerKey === 'updater_id' || lowerKey === 'updaterid') return 'Updated By';
             if (lowerKey === 'base_price') return 'Service Price';
             if (lowerKey === 'is_active' || lowerKey === 'status' || lowerKey === 'was_active') return 'Status';
@@ -855,6 +903,11 @@ export default function ActivityHistory({ user }: { user: { token: string; role?
 
         const mapBusinessValue = (key: string, val: any): string => {
             const lowerKey = key.toLowerCase();
+            if (lowerKey === 'password_changed' || lowerKey === 'passwordchanged') {
+                if (val === true || val === 'true' || val === 1) return 'Password Changed Successfully';
+                if (val === false || val === 'false' || val === 0) return 'No Change';
+                return 'Existing Password';
+            }
             if (val === true || val === 'true') return 'Yes';
             if (val === false || val === 'false') return 'No';
             if (val === null || val === undefined || val === '') {
@@ -1090,6 +1143,9 @@ export default function ActivityHistory({ user }: { user: { token: string; role?
             }
 
             const sections = {
+                'User Information': [
+                    'username', 'email', 'role', 'role_name', 'is_active', 'password_changed', 'passwordchanged'
+                ],
                 'Inventory Information': [
                     'itemName', 'item_name', 'inventoryNumber', 'inventory_number',
                     'category', 'stockQuantity', 'stock_quantity', 'stock', 'unit',
@@ -1113,6 +1169,7 @@ export default function ActivityHistory({ user }: { user: { token: string; role?
             };
 
             const groupedChanges: { [key: string]: typeof changedItems } = {
+                'User Information': [],
                 'Inventory Information': [],
                 'Order Information': [],
                 'Shoe Information': [],
@@ -1145,21 +1202,38 @@ export default function ActivityHistory({ user }: { user: { token: string; role?
                             <div key={sectionTitle} className="space-y-2 mb-3">
                                 <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest border-b border-slate-100 pb-1 block w-full">{sectionTitle}</span>
                                 <div className="bg-white p-3 rounded-xl border border-slate-200 shadow-sm space-y-3 min-w-0">
-                                    {items.map(({ label, oldVal, newVal }) => (
-                                        <div key={label} className="flex flex-col gap-1.5 pb-2.5 border-b border-slate-100 last:border-0 last:pb-0 min-w-0">
-                                            <span className="font-extrabold text-slate-600 uppercase text-[9.5px] tracking-wider">{mapBusinessLabel(label)}</span>
-                                            <div className="grid grid-cols-2 gap-2 mt-0.5 min-w-0">
-                                                <div className="bg-slate-50 border border-slate-200/80 rounded-lg p-2 flex flex-col gap-0.5 min-w-0">
-                                                    <span className="text-[8.5px] font-black uppercase tracking-wider text-slate-400">Previous</span>
-                                                    <span className="text-[12px] font-bold text-slate-700 break-words leading-tight">{mapBusinessValue(label, oldVal)}</span>
+                                    {items.map(({ label, oldVal, newVal }) => {
+                                        const norm = label.toLowerCase().replace(/[_-\s]/g, '');
+                                        if (norm === 'passwordchanged') {
+                                            return (
+                                                <div key={label} className="flex flex-col gap-1.5 pb-2.5 border-b border-slate-100 last:border-0 last:pb-0 min-w-0">
+                                                    <span className="font-extrabold text-slate-600 uppercase text-[9.5px] tracking-wider">Password Security</span>
+                                                    <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-2.5 flex items-center justify-between min-w-0 shadow-2xs">
+                                                        <div className="flex items-center gap-2 min-w-0">
+                                                            <span className="h-2 w-2 rounded-full bg-emerald-500 shrink-0"></span>
+                                                            <span className="text-[12px] font-black text-emerald-900 truncate">Password Changed Successfully</span>
+                                                        </div>
+                                                        <span className="text-[9px] font-black uppercase tracking-wider text-emerald-700 bg-emerald-100/90 px-2 py-0.5 rounded-md shrink-0">Updated</span>
+                                                    </div>
                                                 </div>
-                                                <div className="bg-emerald-50/70 border border-emerald-200/80 rounded-lg p-2 flex flex-col gap-0.5 min-w-0">
-                                                    <span className="text-[8.5px] font-black uppercase tracking-wider text-emerald-700">Updated</span>
-                                                    <span className="text-[12px] font-black text-emerald-900 break-words leading-tight">{mapBusinessValue(label, newVal)}</span>
+                                            );
+                                        }
+                                        return (
+                                            <div key={label} className="flex flex-col gap-1.5 pb-2.5 border-b border-slate-100 last:border-0 last:pb-0 min-w-0">
+                                                <span className="font-extrabold text-slate-600 uppercase text-[9.5px] tracking-wider">{mapBusinessLabel(label)}</span>
+                                                <div className="grid grid-cols-2 gap-2 mt-0.5 min-w-0">
+                                                    <div className="bg-slate-50 border border-slate-200/80 rounded-lg p-2 flex flex-col gap-0.5 min-w-0">
+                                                        <span className="text-[8.5px] font-black uppercase tracking-wider text-slate-400">Previous</span>
+                                                        <span className="text-[12px] font-bold text-slate-700 break-words leading-tight">{mapBusinessValue(label, oldVal)}</span>
+                                                    </div>
+                                                    <div className="bg-emerald-50/70 border border-emerald-200/80 rounded-lg p-2 flex flex-col gap-0.5 min-w-0">
+                                                        <span className="text-[8.5px] font-black uppercase tracking-wider text-emerald-700">Updated</span>
+                                                        <span className="text-[12px] font-black text-emerald-900 break-words leading-tight">{mapBusinessValue(label, newVal)}</span>
+                                                    </div>
                                                 </div>
                                             </div>
-                                        </div>
-                                    ))}
+                                        );
+                                    })}
                                 </div>
                             </div>
                         );
@@ -1171,7 +1245,14 @@ export default function ActivityHistory({ user }: { user: { token: string; role?
         // Humanized API summary (show if distinct from top-level log details to avoid duplication)
         const rawLogDetail = typeof log.details === 'string' ? log.details.trim() : '';
         const newValsDetail = (typeof newVals.details === 'string' && newVals.details.trim()) ? newVals.details.trim() : '';
-        const humanSummary = (newValsDetail && newValsDetail !== rawLogDetail) ? newValsDetail : '';
+        let humanSummary = (newValsDetail && newValsDetail !== rawLogDetail) ? newValsDetail : '';
+        if (humanSummary) {
+            humanSummary = humanSummary
+                .replace(/Password Changed:\s*\(new\)\s*Yes/gi, 'Password Changed Successfully')
+                .replace(/Password Changed:\s*Yes/gi, 'Password Changed Successfully')
+                .replace(/Password Changed:\s*\(new\)\s*No/gi, 'Password: No Change')
+                .replace(/Password Changed:\s*No/gi, 'Password: No Change');
+        }
         const humanBanner =
             humanSummary &&
             (actionStr.includes('UPDATE') || actionStr.includes('CREATED') || actionStr.includes('ADDED') || actionStr.includes('NEW'))
@@ -2642,7 +2723,12 @@ export default function ActivityHistory({ user }: { user: { token: string; role?
                                             (selectedLog.oldValues && typeof selectedLog.oldValues === 'object' && selectedLog.oldValues.details) || '';
                                         if (!rawDetails) return null;
                                         let cleanDetails = String(rawDetails);
-                                        cleanDetails = cleanDetails.replace(/\(saved;\s*no field value changes detected\)/gi, '(Profile verified, no changes detected)');
+                                        cleanDetails = cleanDetails
+                                            .replace(/\(saved;\s*no field value changes detected\)/gi, '(Profile verified, no changes detected)')
+                                            .replace(/Password Changed:\s*\(new\)\s*Yes/gi, 'Password Changed Successfully')
+                                            .replace(/Password Changed:\s*Yes/gi, 'Password Changed Successfully')
+                                            .replace(/Password Changed:\s*\(new\)\s*No/gi, 'Password: No Change')
+                                            .replace(/Password Changed:\s*No/gi, 'Password: No Change');
                                         return (
                                             <div className="mt-1 pt-3 border-t border-slate-200 flex flex-col gap-1.5 min-w-0">
                                                 <span className="font-extrabold text-slate-500 uppercase text-[9px] tracking-widest flex items-center gap-1.5">
